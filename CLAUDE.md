@@ -210,6 +210,95 @@ ticket-mgr/
 - Modern CSS Grid and Flexbox for responsive layouts
 - Accessibility features built into DaisyUI components
 
+## Deployment Instructions
+
+### Render Platform Deployment
+
+This project is configured for seamless deployment on Render using Infrastructure as Code.
+
+#### Prerequisites
+- GitHub repository connected to Render
+- Render account with sufficient plan limits
+- All code committed and pushed to main branch
+
+#### Deployment Steps
+
+1. **Prepare for Deployment**
+   ```bash
+   # Run the deployment preparation script
+   ./deploy.sh
+   ```
+
+2. **Connect Repository to Render**
+   - Log into your Render dashboard
+   - Click "New" → "Blueprint"
+   - Connect your GitHub repository
+   - Select the repository containing this project
+
+3. **Automatic Service Creation**
+   Render will automatically create the following services based on `render.yaml`:
+   
+   - **API Service**: `ticket-manager-api.onrender.com`
+     - Python Flask backend with gunicorn
+     - Health checks on `/health` endpoint
+     - Auto-scaling based on traffic
+   
+   - **Frontend Service**: `ticket-manager-frontend.onrender.com`
+     - Static Astro build deployment
+     - CDN-optimized asset delivery
+     - SPA routing support
+   
+   - **Redis Cache**: Session and temporary file storage
+     - Free tier Redis instance
+     - Automatic memory management
+
+4. **Environment Configuration**
+   The following environment variables are automatically configured:
+   ```
+   FLASK_ENV=production
+   FLASK_APP=app.py
+   PUBLIC_API_URL=https://ticket-manager-api.onrender.com
+   NODE_VERSION=18
+   PYTHON_VERSION=3.11.0
+   ```
+
+5. **Deployment Verification**
+   - Check API health: `https://ticket-manager-api.onrender.com/health`
+   - Access frontend: `https://ticket-manager-frontend.onrender.com`
+   - Monitor deployment logs in Render dashboard
+
+#### Production Deployment Files
+
+- **render.yaml**: Infrastructure as Code configuration
+- **deploy.sh**: Pre-deployment preparation script
+- **.env.production**: Production environment variables (auto-generated)
+
+#### Post-Deployment Configuration
+
+1. **Custom Domain** (Optional)
+   - Add custom domain in Render dashboard
+   - Update CORS settings in `app.py` if needed
+
+2. **Performance Monitoring**
+   - Enable Render metrics and alerts
+   - Monitor Redis cache usage
+   - Set up uptime monitoring
+
+#### Troubleshooting Deployment
+
+Common issues and solutions:
+
+- **Build Failures**: Check build logs in Render dashboard
+- **Memory Issues**: Upgrade to paid plan for larger file processing
+- **CORS Errors**: Verify frontend URL in backend CORS settings
+- **File Upload Issues**: Check disk space and upload limits
+
+#### Scaling Considerations
+
+- **Free Tier Limits**: 750 hours/month, sleeps after 15 minutes of inactivity
+- **Paid Plans**: Always-on services, faster builds, more memory
+- **File Storage**: Consider external storage (AWS S3) for production use
+
 ## Development Commands
 ```bash
 # Start development environment
@@ -223,6 +312,9 @@ python app.py
 
 # Build for production
 npm run build
+
+# Deploy to Render
+./deploy.sh
 
 # Install dependencies
 pip install -r requirements.txt
