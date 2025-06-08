@@ -1,0 +1,371 @@
+---
+import Layout from '../layouts/Layout.astro';
+import FileUpload from '../components/FileUpload.astro';
+---
+
+<Layout title="Ticket Design Overlay Tool">
+  <div class="min-h-screen bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20">
+    <!-- Header -->
+    <div class="navbar bg-base-100/80 backdrop-blur-md shadow-lg">
+      <div class="navbar-center">
+        <h1 class="text-3xl font-bold">🎟️ Ticket Design Overlay Tool</h1>
+      </div>
+    </div>
+    
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+      <div class="text-center mb-8">
+        <p class="text-lg text-base-content/80">Transform your tickets with custom designs while preserving QR functionality</p>
+      </div>
+      
+      <!-- Main Card -->
+      <div class="card bg-base-100 shadow-2xl">
+        <div class="card-body p-8">
+          <!-- Upload Section -->
+          <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <FileUpload
+              id="pdf"
+              title="Upload Ticket PDF"
+              description="Select your ticket PDF file"
+              icon="📄"
+              accept=".pdf"
+            />
+            <FileUpload
+              id="design"
+              title="Upload Design"
+              description="Select your design image (PNG/JPG)"
+              icon="🎨"
+              accept=".png,.jpg,.jpeg"
+            />
+          </div>
+          
+          <!-- Alerts -->
+          <div id="alertContainer" class="space-y-2 mb-6"></div>
+          
+          <!-- Controls Section -->
+          <div id="controls" class="hidden space-y-6 border-t pt-6">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text text-lg font-semibold">Design Opacity</span>
+                <span class="label-text-alt text-lg" id="opacityValue">70%</span>
+              </label>
+              <input type="range" id="opacitySlider" min="0" max="100" value="70" class="range range-primary" />
+            </div>
+            
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text text-lg font-semibold">QR Code Protection Padding</span>
+                <span class="label-text-alt text-lg" id="paddingValue">15px</span>
+              </label>
+              <input type="range" id="paddingSlider" min="0" max="50" value="15" class="range range-secondary" />
+            </div>
+          </div>
+          
+          <!-- Preview Section -->
+          <div id="previewSection" class="hidden mt-8">
+            <div class="divider"></div>
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-2xl font-bold">Preview</h2>
+              <div class="flex gap-4 text-sm">
+                <span class="badge badge-lg">📄 <span id="pageCount">0</span> pages</span>
+                <span class="badge badge-lg">🔲 <span id="qrCount">0</span> QR codes detected</span>
+              </div>
+            </div>
+            
+            <div class="bg-base-200 rounded-lg p-8 min-h-[400px] flex items-center justify-center" id="previewContainer">
+              <p class="text-base-content/50">Preview will appear here...</p>
+            </div>
+            
+            <div class="flex justify-center gap-4 mt-8">
+              <button class="btn btn-secondary" onclick="resetAll()">
+                <span>🔄</span> Start Over
+              </button>
+              <button class="btn btn-primary" onclick="processAndDownload()">
+                <span>⬇️</span> Download Modified PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Features Grid -->
+      <div class="grid md:grid-cols-4 gap-6 mt-12">
+        <div class="card bg-base-100 shadow-lg">
+          <div class="card-body items-center text-center">
+            <div class="text-4xl mb-3">🔒</div>
+            <h4 class="card-title text-lg">QR Protection</h4>
+            <p class="text-sm text-base-content/70">Automatically detects and preserves QR codes</p>
+          </div>
+        </div>
+        <div class="card bg-base-100 shadow-lg">
+          <div class="card-body items-center text-center">
+            <div class="text-4xl mb-3">🎨</div>
+            <h4 class="card-title text-lg">Custom Designs</h4>
+            <p class="text-sm text-base-content/70">Upload any PNG or JPG image</p>
+          </div>
+        </div>
+        <div class="card bg-base-100 shadow-lg">
+          <div class="card-body items-center text-center">
+            <div class="text-4xl mb-3">⚡</div>
+            <h4 class="card-title text-lg">Fast Processing</h4>
+            <p class="text-sm text-base-content/70">Efficiently processes multi-page PDFs</p>
+          </div>
+        </div>
+        <div class="card bg-base-100 shadow-lg">
+          <div class="card-body items-center text-center">
+            <div class="text-4xl mb-3">🎯</div>
+            <h4 class="card-title text-lg">Precise Control</h4>
+            <p class="text-sm text-base-content/70">Adjust opacity and padding</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Loading Modal -->
+    <dialog id="loadingModal" class="modal">
+      <div class="modal-box">
+        <div class="flex flex-col items-center">
+          <span class="loading loading-spinner loading-lg text-primary mb-4"></span>
+          <h3 class="font-bold text-lg" id="loadingText">Processing...</h3>
+          <p class="py-2 text-center" id="loadingSubtext">Please wait while we process your files</p>
+        </div>
+      </div>
+    </dialog>
+  </div>
+</Layout>
+
+<script>
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:5000';
+  let uploadedFiles = {
+    pdf: null,
+    design: null
+  };
+  let processedData = null;
+  
+  // Alert functions
+  function showAlert(type: 'success' | 'error' | 'warning', message: string) {
+    const alertContainer = document.getElementById('alertContainer');
+    const alertClass = type === 'success' ? 'alert-success' : type === 'error' ? 'alert-error' : 'alert-warning';
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️';
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass}`;
+    alert.innerHTML = `
+      <span>${icon}</span>
+      <span>${message}</span>
+    `;
+    
+    alertContainer.appendChild(alert);
+    
+    setTimeout(() => {
+      alert.remove();
+    }, 5000);
+  }
+  
+  function showLoading(text = 'Processing...', subtext = 'Please wait while we process your files') {
+    const modal = document.getElementById('loadingModal') as HTMLDialogElement;
+    document.getElementById('loadingText').textContent = text;
+    document.getElementById('loadingSubtext').textContent = subtext;
+    modal.showModal();
+  }
+  
+  function hideLoading() {
+    const modal = document.getElementById('loadingModal') as HTMLDialogElement;
+    modal.close();
+  }
+  
+  // File handling
+  function handleFileSelect(file: File, type: 'pdf' | 'design') {
+    if (!file) return;
+    
+    uploadedFiles[type] = file;
+    
+    const uploadCard = document.getElementById(`${type}Upload`);
+    uploadCard.classList.add('border-success', 'bg-success/5');
+    
+    const fileInfo = uploadCard.querySelector('.file-info');
+    fileInfo.classList.remove('hidden');
+    fileInfo.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    
+    if (uploadedFiles.pdf && uploadedFiles.design) {
+      processFiles();
+    }
+  }
+  
+  // Setup file input handlers
+  document.getElementById('pdfInput').addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    handleFileSelect(target.files[0], 'pdf');
+  });
+  
+  document.getElementById('designInput').addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    handleFileSelect(target.files[0], 'design');
+  });
+  
+  // Setup drag and drop
+  document.getElementById('pdfUpload').addEventListener('drop', (e) => {
+    const files = (e as DragEvent).dataTransfer.files;
+    if (files.length > 0 && files[0].type === 'application/pdf') {
+      handleFileSelect(files[0], 'pdf');
+    }
+  });
+  
+  document.getElementById('designUpload').addEventListener('drop', (e) => {
+    const files = (e as DragEvent).dataTransfer.files;
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+      handleFileSelect(files[0], 'design');
+    }
+  });
+  
+  // Slider handlers
+  document.getElementById('opacitySlider').addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    document.getElementById('opacityValue').textContent = `${target.value}%`;
+    updatePreview();
+  });
+  
+  document.getElementById('paddingSlider').addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    document.getElementById('paddingValue').textContent = `${target.value}px`;
+    updatePreview();
+  });
+  
+  // Process files
+  async function processFiles() {
+    showLoading('Analyzing files...');
+    
+    const formData = new FormData();
+    formData.append('pdf', uploadedFiles.pdf);
+    formData.append('design', uploadedFiles.design);
+    formData.append('opacity', (parseInt(document.getElementById('opacitySlider').value) / 100).toString());
+    
+    try {
+      const response = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+      
+      const data = await response.json();
+      processedData = data;
+      
+      hideLoading();
+      showAlert('success', 'Files uploaded successfully!');
+      
+      // Show controls and preview
+      document.getElementById('controls').classList.remove('hidden');
+      document.getElementById('previewSection').classList.remove('hidden');
+      
+      // Update preview info
+      document.getElementById('pageCount').textContent = data.pdf_info.pages.length;
+      document.getElementById('qrCount').textContent = 
+        data.pdf_info.pages.reduce((sum, page) => sum + page.qr_codes.length, 0);
+      
+      generatePreview();
+      
+      // Smooth scroll to preview
+      document.getElementById('previewSection').scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+      
+    } catch (error) {
+      hideLoading();
+      showAlert('error', 'Failed to process files. Please try again.');
+      console.error('Error:', error);
+    }
+  }
+  
+  function generatePreview() {
+    const container = document.getElementById('previewContainer');
+    container.innerHTML = `
+      <div class="text-center">
+        <div class="relative inline-block">
+          <img src="data:image/svg+xml,%3Csvg width='400' height='500' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='400' height='500' fill='%23f0f0f0'/%3E%3Ctext x='200' y='250' text-anchor='middle' font-family='Arial' font-size='24' fill='%23999'%3ETicket Preview%3C/text%3E%3C/svg%3E" 
+               class="rounded-lg shadow-xl" alt="Preview">
+          <div class="absolute top-12 right-12 w-20 h-20 border-4 border-error bg-error/20 rounded-lg animate-pulse"></div>
+          <div class="absolute bottom-12 right-12 w-20 h-20 border-4 border-error bg-error/20 rounded-lg animate-pulse"></div>
+        </div>
+        <p class="mt-4 text-base-content/60">Red boxes indicate protected QR code areas</p>
+      </div>
+    `;
+  }
+  
+  function updatePreview() {
+    console.log('Updating preview with new settings...');
+  }
+  
+  window.processAndDownload = async function() {
+    if (!processedData) {
+      showAlert('error', 'Please upload files first');
+      return;
+    }
+    
+    showLoading('Generating your custom tickets...', 'This may take a moment');
+    
+    try {
+      const response = await fetch(`${API_URL}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          pdf_filename: uploadedFiles.pdf.name,
+          design_filename: uploadedFiles.design.name,
+          opacity: parseInt(document.getElementById('opacitySlider').value) / 100,
+          padding: parseInt(document.getElementById('paddingSlider').value)
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Processing failed');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `custom_${uploadedFiles.pdf.name}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      hideLoading();
+      showAlert('success', 'Your custom tickets have been downloaded!');
+      
+    } catch (error) {
+      hideLoading();
+      showAlert('error', 'Failed to process PDF. Please try again.');
+      console.error('Error:', error);
+    }
+  }
+  
+  window.resetAll = function() {
+    uploadedFiles = { pdf: null, design: null };
+    processedData = null;
+    
+    document.querySelectorAll('.file-info').forEach(el => {
+      el.classList.add('hidden');
+    });
+    
+    document.querySelectorAll('[id$="Upload"]').forEach(el => {
+      el.classList.remove('border-success', 'bg-success/5');
+    });
+    
+    document.getElementById('controls').classList.add('hidden');
+    document.getElementById('previewSection').classList.add('hidden');
+    
+    document.getElementById('pdfInput').value = '';
+    document.getElementById('designInput').value = '';
+    document.getElementById('opacitySlider').value = '70';
+    document.getElementById('opacityValue').textContent = '70%';
+    document.getElementById('paddingSlider').value = '15';
+    document.getElementById('paddingValue').textContent = '15px';
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
