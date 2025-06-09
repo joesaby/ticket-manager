@@ -1,0 +1,4 @@
+python3 complete_qr_extractor.py -p uploads/Offline-adult1.PDF -d uploads/adult_base.png -o output/Adult_1_50_for_print.pdf --start-number 1 --qr-scale 0.6  -v
+python3 complete_qr_extractor.py -p uploads/Offline-adult2.PDF -d uploads/adult_base.png -o output/Adult_51_100_for_print.pdf --start-number 51 --qr-scale 0.6  -v
+python3 complete_qr_extractor.py -p uploads/Offline-kid1.PDF -d uploads/kid_base.png -o output/kid_101_150_for_print.pdf --start-number 101 --qr-scale 0.6  -v
+python3 complete_qr_extractor.py -p uploads/Offline-child1.PDF -d uploads/child_base.png -o output/child_151_200_for_print.pdf --start-number 151 --qr-scale 0.6  -v

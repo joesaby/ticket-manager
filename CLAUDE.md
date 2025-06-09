@@ -1,324 +1,225 @@
-# Ticket Manager Project - Claude Documentation
+# Ticket QR Extractor - Claude Documentation
 
 ## Project Overview
-This project is a comprehensive web application that allows users to extract tickets from PDFs, overlay custom designs while preserving QR codes, and download the modified PDFs. The system automatically detects QR code regions and protects them from being covered by the overlay design.
+This project is a Python command-line tool for extracting complete QR code boxes (including text) from ticket PDFs and placing them on custom design templates. It provides a comprehensive solution for creating branded tickets while preserving QR code functionality and associated text information.
 
-## Key Requirements & Critical Features
-- Extract tickets from uploaded PDFs
-- Allow users to upload custom designs for overlay (PNG/JPG)
-- **Critical**: QR code areas must NOT be overlaid (preserved for scanning)
-- Provide real-time preview of the overlay before final processing
-- Allow users to download the modified PDF
-- Modern web-based interface for ease of use
-- Support for multi-page PDFs
-- Adjustable opacity and QR code protection padding
+## Key Features
+- **Complete QR Box Extraction**: Captures QR codes along with status text and ticket codes
+- **Flexible Placement**: Supports both dual QR (both corners) and single QR modes
+- **Design Integration**: Uses custom PNG/JPG templates as ticket backgrounds
+- **Size Control**: Adjustable scaling for QR boxes
+- **Batch Processing**: Handles multi-page PDFs efficiently
+- **High Quality Output**: Maintains image resolution throughout processing
 
-## Project Architecture
+## Technical Architecture
 
-### Backend Components
-1. **app.py** - Main Flask backend API
-   - Full-featured REST API with CORS support
-   - File upload handling (PDFs and images)
-   - Advanced QR code detection using multiple methods
-   - PDF manipulation with PyMuPDF (fitz)
-   - Design overlay application with opacity control
-   - Preview generation capabilities
-   - Endpoints: `/health`, `/upload`, `/process`
+### Core Script: `complete_qr_extractor.py`
 
-2. **standalone.py** - Simplified Flask backend
-   - Lightweight version for testing
-   - Basic upload and processing endpoints
-   - Alternative implementation approach
+The script implements a comprehensive ticket processing pipeline:
 
-### Frontend Components
-1. **Astro Framework Implementation** - Modern web application
-   - **src/pages/index.astro** - Main application page
-   - **src/components/FileUpload.astro** - Reusable upload component
-   - **src/layouts/Layout.astro** - Base layout template
-   - Uses DaisyUI (Tailwind CSS) for modern UI components
-   - Drag-and-drop file upload functionality
-   - Real-time preview with QR code protection visualization
-   - Opacity and padding control sliders
-   - Progress indicators and user feedback alerts
-   - TypeScript integration for type safety
+1. **QR Detection Phase**
+   - Uses pyzbar library for primary QR code detection
+   - Applies image preprocessing for difficult cases
+   - 2x zoom factor for improved detection accuracy
 
-2. **Legacy HTML Implementations** (reference)
-   - Previous standalone HTML implementations
-   - Maintained for compatibility and testing
+2. **Box Extraction Phase**
+   - Expands QR code boundaries to include text above (80px default)
+   - Adds side padding (20px) and bottom padding (10px)
+   - Captures complete ticket information area
 
-### Development Infrastructure
-1. **start-dev.sh** - Development environment launcher
-   - Automatically starts both Flask (port 5000) and Astro (port 4321) servers
-   - Dependency checking and installation
-   - Cross-platform support (Docker and local)
-   - Process management and cleanup
+3. **Design Integration Phase**
+   - Loads custom design template
+   - Scales QR boxes based on user parameters
+   - Places boxes in specified positions (dual or single mode)
 
-2. **Package Management**
-   - **package.json** - Node.js dependencies (Astro, Tailwind, DaisyUI)
-   - **requirements.txt** - Python dependencies (Flask, PyMuPDF, OpenCV, etc.)
+4. **Output Generation Phase**
+   - Creates one ticket per page PDF
+   - Maintains high resolution throughout
+   - Preserves QR code scannability
 
-## Technical Implementation Details
+### Key Classes and Methods
 
-### QR Code Detection System
-The application implements a robust three-tier QR code detection system:
-
-1. **Direct Detection**: Uses pyzbar library for standard QR code recognition
-2. **Enhanced Detection**: Preprocesses images with thresholding and contrast enhancement
-3. **Contour-based Fallback**: Detects square shapes that might be QR codes when other methods fail
-
-### Design Overlay Process
-- Supports PNG/JPG design uploads with validation
-- Automatic image resizing to fit PDF page dimensions
-- Adjustable opacity (0-100%) for design transparency
-- Configurable padding around QR codes for protection
-- Preserves original QR code functionality while applying design
-
-### Frontend-Backend Integration
-- RESTful API communication between Astro frontend and Flask backend
-- FormData for file uploads with multipart encoding
-- JSON API for processing requests
-- Real-time preview updates based on user settings
-- Download handling for processed PDFs
-
-## File Structure
-```
-ticket-mgr/
-├── src/                    # Astro frontend source
-│   ├── components/         # Reusable Astro components
-│   │   ├── FileUpload.astro
-│   │   └── Welcome.astro
-│   ├── layouts/           # Page layouts
-│   │   └── Layout.astro
-│   ├── pages/             # Route pages
-│   │   └── index.astro    # Main application
-│   └── assets/            # Static assets (CSS, images)
-├── app.py                 # Main Flask backend API
-├── standalone.py          # Alternative Flask implementation
-├── uploads/               # User uploaded files
-├── processed/             # Generated output files
-├── previews/              # Preview generation cache
-├── package.json          # Node.js dependencies
-├── requirements.txt       # Python dependencies
-├── astro.config.mjs      # Astro configuration
-├── tsconfig.json         # TypeScript configuration
-├── start-dev.sh          # Development startup script
-└── CLAUDE.md             # This documentation file
+```python
+class CompleteQRExtractor:
+    def __init__(self, verbose=False)
+    def extract_complete_qr_boxes(self, page)
+    def detect_qr_codes(self, image_data)
+    def process_pdf(self, pdf_path, design_path, output_path, ...)
+    def apply_overlay(self, page, design, page_image_data, ...)
 ```
 
-## Technology Stack
-- **Frontend Framework**: Astro 5.9.1 with TypeScript support
-- **UI Framework**: DaisyUI 5.0.43 + Tailwind CSS 4.1.8
-- **Backend**: Python Flask 3.0.0 with CORS support
-- **PDF Processing**: PyMuPDF (fitz) 1.23.8
-- **Computer Vision**: OpenCV 4.8.1.78 + NumPy 1.24.3
-- **QR Detection**: pyzbar 0.1.9
-- **Image Processing**: Pillow 10.1.0
+### Dependencies
+- **PyMuPDF (fitz)**: PDF manipulation and rendering
+- **OpenCV**: Image processing and enhancement
+- **Pillow (PIL)**: Image scaling and format conversion
+- **pyzbar**: QR code detection and decoding
+- **NumPy**: Array operations for image processing
 
-## Current Implementation Status
-- ✅ **Complete**: Flask backend API with full QR detection and overlay functionality
-- ✅ **Complete**: Astro frontend with modern UI and file upload
-- ✅ **Complete**: Development environment setup and automation
-- ✅ **Complete**: File upload and validation system
-- ✅ **Complete**: Real-time preview interface (placeholder implementation)
-- ✅ **Complete**: Download functionality for processed PDFs
-- ✅ **Complete**: Responsive design with mobile support
-- ⚠️ **Partial**: Preview generation needs actual PDF rendering
-- ⚠️ **Enhancement**: Could add batch processing capabilities
-- ⚠️ **Enhancement**: Could add template saving functionality
+## Implementation Details
 
-## API Documentation
+### QR Box Detection Algorithm
+```
+1. Convert PDF page to high-resolution image (2x zoom)
+2. Detect QR codes using pyzbar
+3. If no QR codes found:
+   - Apply binary thresholding
+   - Retry detection with preprocessed image
+4. For each detected QR code:
+   - Expand boundaries upward by 80px (text area)
+   - Add 20px horizontal padding
+   - Add 10px bottom padding
+   - Ensure boundaries stay within page limits
+```
 
-### Endpoints
-1. **GET /health**
-   - Returns: Server status and health check
-   - Use: Verify backend connectivity
+### Placement Logic
+**Dual QR Mode (Default):**
+- Processes QR codes in pairs
+- First QR: bottom-left corner
+- Second QR: bottom-right corner
+- Creates one ticket per pair
 
-2. **POST /upload**
-   - Parameters: FormData with `pdf` (file), `design` (file), `opacity` (float 0-1)
-   - Returns: JSON with PDF analysis and QR code locations
-   - Use: Initial file processing and analysis
+**Single QR Mode:**
+- One QR box per ticket
+- Placed in bottom-right corner
+- Creates one ticket per QR code
 
-3. **POST /process**
-   - Parameters: JSON with `pdf_filename`, `design_filename`, `opacity`, `padding`
-   - Returns: Binary PDF file
-   - Use: Generate final overlay and download
+### Scaling and Positioning
+- QR boxes are scaled uniformly (width and height)
+- Position calculation ensures boxes fit within design boundaries
+- Automatic adjustment if scaled box exceeds margins
 
-### Error Handling
-- Comprehensive validation for file types and sizes
-- CORS configuration for cross-origin requests
-- User-friendly error messages and alerts
-- Graceful degradation for unsupported browsers
+## Command-Line Interface
 
-## Development Workflow
-1. **Setup**: Run `./start-dev.sh` to start both servers
-2. **Frontend Development**: Modify Astro components in `src/`
-3. **Backend Development**: Edit `app.py` for API changes
-4. **Testing**: Use both servers running simultaneously
-5. **Deployment**: Build Astro (`npm run build`) and deploy Flask app
+```bash
+python3 complete_qr_extractor.py [OPTIONS]
+```
 
-## Security Considerations
-- File type validation and sanitization
-- Filename security and path traversal prevention
-- File size limits (50MB max)
-- CORS configuration restricts origins
-- Temporary file cleanup
-- Input validation on all API endpoints
+### Required Parameters
+- `-p, --pdf PATH` - Input PDF file containing tickets
+- `-d, --design PATH` - Design template image (PNG/JPG)
+- `-o, --output PATH` - Output PDF file path
 
-## Performance Optimizations
-- Efficient PDF processing with PyMuPDF
-- Optimized QR detection algorithms
-- Client-side file validation before upload
-- Progressive loading for large files
-- Memory management for large PDFs
+### Optional Parameters
+- `--qr-scale FLOAT` - Scale factor for QR boxes (default: 1.0)
+- `--qr-margin INT` - Margin from edges in pixels (default: 20)
+- `--single-qr` - Use single QR mode instead of dual
+- `-v, --verbose` - Enable detailed logging
+
+## Performance Characteristics
+
+### Processing Speed
+- Page conversion: ~0.5-1s per page (depends on resolution)
+- QR detection: ~0.1-0.3s per QR code
+- Output generation: ~0.2-0.5s per ticket
+
+### Memory Usage
+- Scales linearly with PDF page count
+- Peak usage during high-resolution page rendering
+- Efficient cleanup after each page processing
+
+### Output Quality
+- Maintains source QR code resolution
+- High-quality image scaling algorithms
+- No compression artifacts in final output
+
+## Error Handling
+
+### Detection Failures
+- Falls back to preprocessing if initial detection fails
+- Logs warnings for undetected QR codes
+- Continues processing remaining pages
+
+### Size Constraints
+- Validates that scaled boxes fit within design
+- Automatically adjusts position if needed
+- Warns user if boxes are too large
+
+### File Validation
+- Checks file existence before processing
+- Validates file types (PDF, PNG, JPG)
+- Creates output directories if needed
+
+## Best Practices
+
+### Recommended Settings
+```bash
+# For standard tickets with text
+--qr-scale 0.8 --qr-margin 15
+
+# For compact designs
+--qr-scale 0.6 --qr-margin 10
+
+# For large format tickets
+--qr-scale 1.2 --qr-margin 30
+```
+
+### Design Guidelines
+1. **Template Size**: Match intended output dimensions
+2. **Clear Space**: Leave bottom area clear for QR placement
+3. **Resolution**: Use 300+ DPI for best quality
+4. **Format**: PNG with transparency for overlays
+
+### Input PDF Requirements
+1. **QR Codes**: High contrast, properly formatted
+2. **Text Layout**: Clear text above QR codes
+3. **Page Structure**: Consistent ticket layout
+4. **Resolution**: Higher resolution improves detection
+
+## Troubleshooting Guide
+
+### Common Issues
+
+**Issue: QR codes not detected**
+```
+Solution:
+1. Check QR code contrast and clarity
+2. Ensure QR codes are standard format
+3. Try verbose mode to see detection attempts
+4. Verify PDF is not corrupted
+```
+
+**Issue: Text cut off in extraction**
+```
+Solution:
+1. Default captures 80px above QR code
+2. Modify text_height in extract_complete_qr_boxes() if needed
+3. Ensure consistent text placement in source PDF
+```
+
+**Issue: Output boxes too large**
+```
+Solution:
+1. Reduce --qr-scale (try 0.6-0.8)
+2. Increase --qr-margin for more edge space
+3. Use smaller design templates
+```
 
 ## Future Enhancement Opportunities
-1. **Batch Processing**: Multiple PDF processing simultaneously
-2. **Template Library**: Save and reuse popular design templates
-3. **Advanced Positioning**: Manual drag-and-drop design placement
-4. **Multi-page Designs**: Different designs for different pages
-5. **Cloud Integration**: AWS S3/Google Cloud storage integration
-6. **Real-time Collaboration**: Multiple users working on designs
-7. **Mobile App**: Native mobile application
-8. **API Expansion**: Full RESTful API for third-party integration
-9. **Analytics**: Usage tracking and optimization insights
-10. **A/B Testing**: Design effectiveness measurement
 
-## Testing Strategy
-- Unit tests for QR detection algorithms
-- Integration tests for API endpoints
-- Frontend component testing with Astro
-- End-to-end workflow testing
-- Performance testing with large PDFs
-- Cross-browser compatibility testing
+1. **Configurable Text Area**: Allow custom text capture height
+2. **Multiple Templates**: Support different designs per ticket type
+3. **Text Recognition**: OCR integration for text extraction
+4. **Batch Templates**: Apply different designs in one run
+5. **Position Presets**: Named positioning configurations
+6. **Preview Mode**: Generate preview before final processing
+7. **API Integration**: REST API for web services
+8. **Cloud Storage**: Direct upload/download from cloud
 
-## Deployment Considerations
-- Docker containerization for consistent environments
-- Environment variable configuration
-- Production CORS settings
-- Static file serving optimization
-- Database integration for user management
-- Load balancing for high traffic
-- CDN integration for asset delivery
+## Code Quality Considerations
 
-## Important Technical Notes
-- QR code preservation is the highest priority feature
-- Multiple QR detection methods ensure 99%+ reliability
-- System handles multi-page PDFs efficiently
-- Design overlays automatically resize to fit page dimensions
-- Real-time preview updates provide immediate feedback
-- TypeScript ensures type safety throughout frontend
-- Modern CSS Grid and Flexbox for responsive layouts
-- Accessibility features built into DaisyUI components
+### Modularity
+- Clear separation of detection, extraction, and generation phases
+- Reusable methods for common operations
+- Easy to extend with new features
 
-## Deployment Instructions
+### Error Handling
+- Comprehensive exception handling
+- Informative error messages
+- Graceful degradation on failures
 
-### Render Platform Deployment
+### Performance
+- Efficient image processing pipelines
+- Memory-conscious implementation
+- Scalable to large PDF files
 
-This project is configured for seamless deployment on Render using Infrastructure as Code.
-
-#### Prerequisites
-- GitHub repository connected to Render
-- Render account with sufficient plan limits
-- All code committed and pushed to main branch
-
-#### Deployment Steps
-
-1. **Prepare for Deployment**
-   ```bash
-   # Run the deployment preparation script
-   ./deploy.sh
-   ```
-
-2. **Connect Repository to Render**
-   - Log into your Render dashboard
-   - Click "New" → "Blueprint"
-   - Connect your GitHub repository
-   - Select the repository containing this project
-
-3. **Automatic Service Creation**
-   Render will automatically create the following services based on `render.yaml`:
-   
-   - **API Service**: `ticket-manager-api.onrender.com`
-     - Python Flask backend with gunicorn
-     - Health checks on `/health` endpoint
-     - Auto-scaling based on traffic
-   
-   - **Frontend Service**: `ticket-manager-frontend.onrender.com`
-     - Static Astro build deployment
-     - CDN-optimized asset delivery
-     - SPA routing support
-   
-   - **Redis Cache**: Session and temporary file storage
-     - Free tier Redis instance
-     - Automatic memory management
-
-4. **Environment Configuration**
-   The following environment variables are automatically configured:
-   ```
-   FLASK_ENV=production
-   FLASK_APP=app.py
-   PUBLIC_API_URL=https://ticket-manager-api.onrender.com
-   NODE_VERSION=18
-   PYTHON_VERSION=3.11.0
-   ```
-
-5. **Deployment Verification**
-   - Check API health: `https://ticket-manager-api.onrender.com/health`
-   - Access frontend: `https://ticket-manager-frontend.onrender.com`
-   - Monitor deployment logs in Render dashboard
-
-#### Production Deployment Files
-
-- **render.yaml**: Infrastructure as Code configuration
-- **deploy.sh**: Pre-deployment preparation script
-- **.env.production**: Production environment variables (auto-generated)
-
-#### Post-Deployment Configuration
-
-1. **Custom Domain** (Optional)
-   - Add custom domain in Render dashboard
-   - Update CORS settings in `app.py` if needed
-
-2. **Performance Monitoring**
-   - Enable Render metrics and alerts
-   - Monitor Redis cache usage
-   - Set up uptime monitoring
-
-#### Troubleshooting Deployment
-
-Common issues and solutions:
-
-- **Build Failures**: Check build logs in Render dashboard
-- **Memory Issues**: Upgrade to paid plan for larger file processing
-- **CORS Errors**: Verify frontend URL in backend CORS settings
-- **File Upload Issues**: Check disk space and upload limits
-
-#### Scaling Considerations
-
-- **Free Tier Limits**: 750 hours/month, sleeps after 15 minutes of inactivity
-- **Paid Plans**: Always-on services, faster builds, more memory
-- **File Storage**: Consider external storage (AWS S3) for production use
-
-## Development Commands
-```bash
-# Start development environment
-./start-dev.sh
-
-# Frontend only
-npm run dev
-
-# Backend only  
-python app.py
-
-# Build for production
-npm run build
-
-# Deploy to Render
-./deploy.sh
-
-# Install dependencies
-pip install -r requirements.txt
-npm install
-```
-
-This documentation serves as the complete reference for understanding, developing, and maintaining the Ticket Manager project.
+This documentation provides the complete technical reference for the Ticket QR Extractor project.

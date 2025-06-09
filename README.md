@@ -1,238 +1,262 @@
-# Ticket Design Overlay Tool
+# Ticket QR Extractor
 
-A web application that allows users to overlay custom designs on ticket PDFs while preserving QR code functionality.
+A Python tool for extracting QR codes with text from ticket PDFs and creating customized tickets with design overlays.
+
+## Overview
+
+This tool extracts complete QR code boxes (including status text and ticket codes) from PDF tickets and places them on custom design templates. Perfect for creating branded tickets while preserving QR functionality.
 
 ## Features
 
-- 🎫 **QR Code Protection**: Automatically detects and preserves QR codes using multiple detection methods
-- 🎨 **Custom Design Overlay**: Upload any PNG/JPG image as overlay with adjustable opacity
-- 👁️ **Real-time Preview**: See how your tickets will look before processing
-- ⚡ **Fast Processing**: Efficiently handles multi-page PDFs
-- 🎯 **Precise Control**: Adjust opacity and QR padding for perfect results
-- 📥 **Easy Download**: Get modified PDFs with preserved QR functionality
-- 🔒 **Safe Processing**: Original QR codes remain scannable
+- ✅ **Complete QR Box Extraction** - Captures QR codes with ticket codes
+- ✅ **Automatic Text Masking** - Masks "Awaiting Payment" text with white
+- ✅ **Ticket Numbering** - Automatically adds sequential ticket numbers
+- ✅ **Custom Design Templates** - Use your own PNG/JPG designs as ticket backgrounds
+- ✅ **Flexible Placement** - Dual QR mode (both corners) or single QR mode
+- ✅ **Size Control** - Adjustable scaling for QR boxes
+- ✅ **Batch Processing** - Process multiple tickets from multi-page PDFs
+- ✅ **High Quality Output** - Maintains image quality with proper scaling
 
-## Tech Stack
+## Prerequisites
 
-- **Frontend**: Astro + DaisyUI (Tailwind CSS)
-- **Backend**: Python Flask
-- **PDF Processing**: PyMuPDF (fitz)
-- **QR Detection**: pyzbar + OpenCV + PIL
-- **Image Processing**: OpenCV, NumPy, Pillow
+### System Requirements
+- Python 3.9 or higher
+- macOS, Linux, or Windows
 
-## Quick Start
-
-### Using Development Script (Recommended)
-
+### Required Python Libraries
 ```bash
-./start-dev.sh
+pip install PyMuPDF opencv-python pillow pyzbar numpy
 ```
 
-This will start both the Flask backend (port 5000) and Astro frontend (port 4321).
+### System Dependencies
 
-### Manual Setup
+**For macOS:**
+```bash
+brew install zbar
+```
 
-1. **Install Python dependencies:**
+**For Ubuntu/Debian:**
+```bash
+sudo apt-get update && sudo apt-get install -y libzbar0
+```
+
+**For CentOS/RHEL:**
+```bash
+sudo yum install zbar
+```
+
+## Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd ticket-manager
+   ```
+
+2. **Install Python dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Install Node dependencies:**
-   ```bash
-   npm install
-   ```
+3. **Install system dependencies** (see above for your OS)
 
-3. **Install system dependencies:**
-   - Ubuntu/Debian: `sudo apt-get install libzbar0 libzbar-dev`
-   - macOS: `brew install zbar`
-   - Windows: Download and install zbar from the official website
-
-4. **Start servers individually:**
+4. **Verify installation:**
    ```bash
-   # Terminal 1 - Flask API
-   python app.py
-   
-   # Terminal 2 - Astro Frontend  
-   npm run dev
+   python3 complete_qr_extractor.py --help
    ```
 
 ## Usage
 
-1. Access the application at http://localhost:4321
-2. Upload your ticket PDF
-3. Upload your design image (PNG/JPG)
-4. Adjust opacity (0-100%) and QR padding as needed
-5. Preview the result
-6. Download the modified PDF
+### Basic Usage (Both Corners)
 
-## API Endpoints
-
-- `GET /health` - Health check
-- `POST /upload` - Upload PDF and design files
-  - Form data: `pdf` (file), `design` (file), `opacity` (float 0-1)
-  - Returns: Preview data and QR code locations
-- `POST /process` - Process overlay and download result
-  - JSON body: `{"pdf_filename": "file.pdf", "design_filename": "design.png", "opacity": 0.7}`
-  - Returns: Modified PDF file
-
-## Project Structure
-
-```
-ticket-mgr/
-├── src/                    # Astro frontend source
-│   ├── components/         # Reusable components
-│   │   ├── FileUpload.astro
-│   │   └── Welcome.astro
-│   ├── layouts/           # Page layouts
-│   │   └── Layout.astro
-│   ├── pages/             # Route pages
-│   │   └── index.astro
-│   └── assets/            # Static assets
-├── app.py                 # Flask backend (main API)
-├── standalone.py          # Simplified Flask backend
-├── ticket-overlay.py      # CLI tool
-├── uploads/               # Uploaded files directory
-├── processed/             # Processed files directory
-├── previews/              # Preview files directory
-├── requirements.txt       # Python dependencies
-├── package.json          # Node dependencies
-└── start-dev.sh          # Development startup script
-```
-
-## Advanced Features
-
-### QR Code Detection Methods
-
-The tool uses three comprehensive methods to detect QR codes:
-
-1. **Direct Detection**: Uses pyzbar library for standard QR detection
-2. **Enhanced Detection**: Preprocesses images with thresholding and contrast enhancement
-3. **Contour Detection**: Finds square shapes that might be QR codes as fallback
-
-### Customization Options
-
-You can modify the processing by adjusting:
-
-- QR code padding (configurable buffer around detected codes)
-- Detection sensitivity and parameters
-- Opacity levels for design overlay
-- Support for batch processing multiple PDFs
-
-### Command Line Usage
-
-```python
-from ticket_processor import TicketProcessor
-
-# Initialize processor
-processor = TicketProcessor()
-
-# Extract PDF information
-pdf_info = processor.extract_pdf_info('tickets.pdf')
-
-# Apply overlay
-processor.apply_overlay(
-    pdf_path='tickets.pdf',
-    design_path='my_design.png',
-    output_path='modified_tickets.pdf',
-    opacity=0.7,
-    preserve_qr=True
-)
-```
-
-## Environment Variables
-
-- `PUBLIC_API_URL` - Backend API URL (default: http://localhost:5000)
-
-## Troubleshooting
-
-### QR codes not detected
-- Ensure PDF has sufficient quality and resolution
-- Try adjusting the zoom factor in `extract_pdf_info`
-- Check if QR codes are embedded as images vs. vector graphics
-- Verify the detection parameters in `app.py`
-
-### Design doesn't fit properly
-- Design images are automatically resized to fit each page
-- Use high-resolution designs for best results
-- Consider the aspect ratio of your tickets
-
-### CORS errors
-- Make sure both servers are running on correct ports
-- Check that API URL is correct in environment variables
-- Verify Flask CORS configuration
-
-### File upload fails
-- Check file size limits in Flask configuration
-- Ensure correct file formats (PDF for tickets, PNG/JPG for design)
-- Verify upload directory permissions
-
-### Memory issues with large PDFs
-- Process PDFs in smaller batches
-- Reduce the zoom factor for QR detection
-- Implement page-by-page processing for very large files
-
-## Performance Optimization
-
-For large PDFs:
-- Process pages in parallel using multiprocessing
-- Cache QR detection results between runs
-- Use lower resolution for preview generation
-- Implement progressive loading for large files
-
-## Security Considerations
-
-- All file uploads are validated for type and size
-- Implement rate limiting for production use
-- Sanitize all filenames and paths
-- Add authentication for production deployment
-- Regular cleanup of temporary files
-- Input validation for all API endpoints
-
-## Development
-
-### Astro Commands
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-### Python Development
+Extract QR boxes and place them in both bottom corners:
 
 ```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# Windows: venv\Scripts\activate
-# macOS/Linux: source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run Flask development server
-python app.py
+python3 complete_qr_extractor.py -p input.pdf -d design.png -o output.pdf
 ```
 
-## Future Enhancements
+### Single QR Mode (Left Corner Only)
 
-1. **Batch Processing**: Handle multiple PDFs simultaneously
-2. **Template Library**: Save and reuse design templates
-3. **Advanced Positioning**: Manual adjustment of design placement
-4. **Multi-page Designs**: Different designs for different pages
-5. **API Integration**: Full RESTful API for programmatic access
-6. **Real-time Collaboration**: Multiple users working on designs
-7. **Cloud Storage**: Integration with cloud storage services
-8. **Mobile Support**: Responsive design for mobile devices
+Place QR box only in bottom-left corner:
+
+```bash
+python3 complete_qr_extractor.py -p input.pdf -d design.png -o output.pdf --qr-position left
+```
+
+### Single QR Mode (Right Corner Only)
+
+Place QR box only in bottom-right corner:
+
+```bash
+python3 complete_qr_extractor.py -p input.pdf -d design.png -o output.pdf --qr-position right
+```
+
+### With Size Adjustment
+
+Make QR boxes smaller (recommended 0.8 for complete boxes):
+
+```bash
+python3 complete_qr_extractor.py -p input.pdf -d design.png -o output.pdf --qr-scale 0.8
+```
+
+### With Ticket Numbering
+
+Add sequential ticket numbers starting from 001:
+
+```bash
+python3 complete_qr_extractor.py -p input.pdf -d design.png -o output.pdf --start-number 1
+```
+
+### Full Example with All Options
+
+```bash
+python3 complete_qr_extractor.py \
+  -p uploads/tickets.pdf \
+  -d uploads/design.png \
+  -o output/branded_tickets.pdf \
+  --qr-scale 0.8 \
+  --qr-margin 15 \
+  -v
+```
+
+## Parameters
+
+- `-p, --pdf` - Input PDF file containing QR codes (required)
+- `-d, --design` - Design template image PNG/JPG (required)
+- `-o, --output` - Output PDF file path (required)
+- `--qr-scale` - Scale factor for QR boxes (default: 1.0)
+  - Recommended: 0.8 for complete boxes with text
+  - Range: 0.1 to 2.0
+- `--qr-margin` - Margin from edges in pixels (default: 20)
+- `--qr-position` - QR placement: `left`, `right`, or `both` (default: both)
+- `--start-number` - Starting ticket number (e.g., 1 for 001, 2 for 002)
+- `--no-mask` - Do not mask "Awaiting Payment" text (keep original)
+- `-v, --verbose` - Enable detailed logging
+
+## Input Requirements
+
+### PDF Files
+- **Format**: PDF with embedded QR codes
+- **Layout**: Can contain multiple tickets per page
+- **Text**: Should have status text and ticket codes above QR codes
+
+### Design Templates
+- **Format**: PNG or JPG
+- **Resolution**: High resolution recommended (300+ DPI)
+- **Size**: Should match desired output ticket dimensions
+
+## Output
+
+- **Format**: PDF with one ticket per page
+- **QR Placement**: 
+  - Both mode: Same QR code in bottom-left and bottom-right corners
+  - Left mode: QR code in bottom-left corner only
+  - Right mode: QR code in bottom-right corner only
+- **Content**: Complete QR boxes including text
+
+## Examples
+
+### Example 1: Standard Dual QR Tickets with Numbering
+```bash
+python3 complete_qr_extractor.py \
+  -p uploads/Offline-adult1.PDF \
+  -d uploads/Screenshot.png \
+  -o output/dual_tickets.pdf \
+  --qr-scale 0.8 \
+  --start-number 1 \
+  -v
+```
+
+### Example 2: Single QR Tickets (Right Corner) without Masking
+```bash
+python3 complete_qr_extractor.py \
+  -p uploads/Offline-adult1.PDF \
+  -d uploads/Adult.png \
+  -o output/single_tickets.pdf \
+  --qr-position right \
+  --qr-scale 0.6 \
+  --qr-margin 25 \
+  --no-mask \
+  -v
+```
+
+### Example 3: Left Corner QR with Numbering
+```bash
+python3 complete_qr_extractor.py \
+  -p uploads/tickets.pdf \
+  -d uploads/design.png \
+  -o output/left_tickets.pdf \
+  --qr-position left \
+  --qr-scale 0.8 \
+  --start-number 1 \
+  -v
+```
+
+### Example 4: Numbered Tickets Starting from 100 (Both Corners)
+```bash
+python3 complete_qr_extractor.py \
+  -p uploads/tickets.pdf \
+  -d uploads/design.png \
+  -o output/numbered_tickets.pdf \
+  --qr-position both \
+  --qr-scale 0.8 \
+  --start-number 100 \
+  -v
+```
+
+## Tips and Best Practices
+
+### QR Box Scaling
+- **0.6 - 0.8**: Recommended for complete boxes (includes text)
+- **0.8 - 1.0**: Standard size
+- **1.0 - 1.5**: Larger boxes (ensure they fit)
+
+### Design Templates
+- Use consistent dimensions
+- Leave space at bottom for QR placement
+- High resolution for best quality
+
+### Troubleshooting
+
+**QR Codes Not Detected:**
+- Ensure QR codes are clear and high contrast
+- Check that text above QR codes is readable
+- Try verbose mode (`-v`) to see detection details
+
+**Boxes Too Large:**
+- Reduce `--qr-scale` (try 0.6 or 0.7)
+- Increase `--qr-margin` for more edge space
+
+**Text Cut Off:**
+- The tool automatically captures ~80 pixels above QR code
+- Ensure source PDF has clear text layout
+
+## File Structure
+
+```
+ticket-manager/
+├── complete_qr_extractor.py    # Main script
+├── requirements.txt            # Python dependencies
+├── README.md                   # This file
+├── CLAUDE.md                   # Technical documentation
+├── uploads/                    # Sample input files
+│   ├── Offline-adult1.PDF      # Sample ticket PDF
+│   ├── Screenshot.png          # Sample design
+│   └── Adult.png              # Alternative design
+└── output/                     # Generated output files
+```
+
+## Technical Details
+
+- **QR Detection**: Uses pyzbar with fallback preprocessing
+- **Text Extraction**: Captures ~80 pixels above each QR code
+- **Image Processing**: 2x resolution for accurate detection
+- **PDF Generation**: One ticket per page output
 
 ## License
 
-This tool is provided as-is for personal and commercial use.
+This project is open source. Check repository for license details.
 
----
+## Support
 
-For more information about Astro, check [the documentation](https://docs.astro.build) or join the [Discord server](https://astro.build/chat).
+For issues or questions, please refer to the repository documentation.
