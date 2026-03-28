@@ -151,6 +151,174 @@ async function loadFiles() {
   status.textContent = '';
 }
 </script>
-<!-- drag-and-drop logic added in Task 7 -->
+<script>
+// -------- Source panel: read-only QR overlay --------
+async function detectAndShowSourceQR(pdf, frame, imgEl) {
+  const resp = await fetch('/api/detect-qr/' + encodeURIComponent(pdf));
+  const data = await resp.json();
+  if (!data.boxes || data.boxes.length === 0) return;
+
+  const box = data.boxes[0];
+  // PDF preview image is rendered at 2x then served as PNG.
+  // The img element displays it scaled to fit. Compute display scale.
+  // detect-qr already returns coords in original (1x) PDF pixel space (it divides by 2).
+  // We only need to scale from native pixels to display pixels.
+  const scaleX = imgEl.clientWidth / imgEl.naturalWidth;
+  const scaleY = imgEl.clientHeight / imgEl.naturalHeight;
+
+  const div = document.createElement('div');
+  div.style.cssText = `
+    position:absolute;
+    left:${box.x * scaleX}px;
+    top:${box.y * scaleY}px;
+    width:${box.w * scaleX}px;
+    height:${box.h * scaleY}px;
+    border:2px solid #7c3aed;
+    background:rgba(124,58,237,0.1);
+    border-radius:3px;
+    pointer-events:none;
+  `;
+  const lbl = document.createElement('span');
+  lbl.textContent = 'auto-detected ✓';
+  lbl.style.cssText = 'position:absolute;top:-18px;left:0;font-size:9px;color:#7c3aed;font-weight:600;white-space:nowrap;';
+  div.appendChild(lbl);
+  frame.style.position = 'relative';
+  frame.appendChild(div);
+}
+
+// -------- Design panel: draggable + resizable overlay --------
+window.qrOverlay = null;   // the overlay element
+window.designNativeW = 0;
+window.designNativeH = 0;
+
+function setupDesignOverlay(frame, imgEl) {
+  window.designNativeW = imgEl.naturalWidth;
+  window.designNativeH = imgEl.naturalHeight;
+
+  frame.style.position = 'relative';
+
+  // Create overlay box
+  const box = document.createElement('div');
+  box.id = 'qrBox';
+  const scale = parseFloat(document.getElementById('sldScale').value);
+  // Initial size: 80px display, positioned bottom-right
+  const initW = 80, initH = 90;
+  box.style.cssText = `
+    position:absolute;
+    width:${initW}px;height:${initH}px;
+    right:14px;bottom:14px;
+    border:2px dashed #f59e0b;
+    background:rgba(245,158,11,0.15);
+    border-radius:4px;
+    cursor:move;
+    user-select:none;
+  `;
+
+  // Resize handle (bottom-right corner)
+  const handle = document.createElement('div');
+  handle.style.cssText = `
+    position:absolute;right:-4px;bottom:-4px;
+    width:10px;height:10px;
+    background:#f59e0b;border-radius:2px;
+    cursor:se-resize;
+  `;
+  box.appendChild(handle);
+
+  // Coords readout
+  const coords = document.createElement('div');
+  coords.id = 'coords';
+  coords.textContent = '';
+  frame.appendChild(coords);
+
+  frame.appendChild(box);
+  window.qrOverlay = box;
+
+  makeDraggable(box, frame, handle, imgEl, coords);
+}
+
+function updateOverlaySize() {
+  // Called when scale slider changes after overlay is set up.
+  // Resizes the box proportionally and updates the coord readout.
+  const box = window.qrOverlay;
+  if (!box) return;
+  const baseW = 80; // same base used when overlay was created
+  const baseH = 90;
+  const scale = parseFloat(document.getElementById('sldScale').value);
+  box.style.width = Math.round(baseW * scale) + 'px';
+  box.style.height = Math.round(baseH * scale) + 'px';
+  updateCoords(box, document.getElementById('coords'));
+}
+
+function updateCoords(box, coordsEl) {
+  const frame = box.parentElement;
+  const imgEl = frame.querySelector('img');
+  if (!imgEl) return;
+  const scaleX = imgEl.naturalWidth / imgEl.clientWidth;
+  const scaleY = imgEl.naturalHeight / imgEl.clientHeight;
+
+  const x = Math.round(box.offsetLeft * scaleX);
+  const y = Math.round(box.offsetTop * scaleY);
+  coordsEl.textContent = `x:${x} y:${y}`;
+}
+
+function makeDraggable(box, frame, handle, imgEl, coordsEl) {
+  let dragState = null;
+
+  box.addEventListener('mousedown', e => {
+    if (e.target === handle) return; // handled separately
+    e.preventDefault();
+    const fr = frame.getBoundingClientRect();
+    dragState = {
+      type: 'drag',
+      startX: e.clientX - box.offsetLeft,
+      startY: e.clientY - box.offsetTop,
+      frameRect: fr,
+    };
+  });
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragState = {
+      type: 'resize',
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: box.offsetWidth,
+      startH: box.offsetHeight,
+    };
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragState) return;
+    if (dragState.type === 'drag') {
+      const fr = dragState.frameRect;
+      let x = e.clientX - dragState.startX;
+      let y = e.clientY - dragState.startY;
+      // Clamp within frame
+      x = Math.max(0, Math.min(x, fr.width - box.offsetWidth));
+      y = Math.max(0, Math.min(y, fr.height - box.offsetHeight));
+      box.style.left = x + 'px';
+      box.style.top = y + 'px';
+      box.style.right = 'auto';
+      box.style.bottom = 'auto';
+    } else {
+      const dw = e.clientX - dragState.startX;
+      const dh = e.clientY - dragState.startY;
+      const newW = Math.max(20, dragState.startW + dw);
+      const newH = Math.max(20, dragState.startH + dh);
+      box.style.width = newW + 'px';
+      box.style.height = newH + 'px';
+      // Update scale slider to reflect new size relative to original
+      const baseW = 80;
+      const newScale = (newW / baseW).toFixed(2);
+      document.getElementById('sldScale').value = newScale;
+      document.getElementById('scaleVal').textContent = newScale + '×';
+    }
+    updateCoords(box, coordsEl);
+  });
+
+  document.addEventListener('mouseup', () => { dragState = null; });
+}
+</script>
 </body>
 </html>
