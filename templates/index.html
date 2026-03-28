@@ -150,6 +150,35 @@ async function loadFiles() {
   document.getElementById('btnGenerate').disabled = false;
   status.textContent = '';
 }
+
+// -------- Generate --------
+document.getElementById('btnGenerate').addEventListener('click', async () => {
+  const pdf = document.getElementById('selPdf').value;
+  const design = document.getElementById('selDesign').value;
+  const startNumber = parseInt(document.getElementById('inpStart').value, 10);
+  const qrScale = parseFloat(document.getElementById('sldScale').value);
+
+  const box = document.getElementById('qrBox');
+  const imgEl = document.getElementById('designImg');
+  if (!box || !imgEl) { alert('Load files first.'); return; }
+
+  // Convert display coords → native pixel coords
+  const scaleX = imgEl.naturalWidth / imgEl.clientWidth;
+  const scaleY = imgEl.naturalHeight / imgEl.clientHeight;
+  const qrX = Math.round(box.offsetLeft * scaleX);
+  const qrY = Math.round(box.offsetTop * scaleY);
+
+  const resp = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdf, design, qr_x: qrX, qr_y: qrY, qr_scale: qrScale, start_number: startNumber }),
+  });
+
+  const data = await resp.json();
+  const preview = document.getElementById('script-preview');
+  preview.textContent = data.script;
+  preview.style.display = 'block';
+});
 </script>
 <script>
 // -------- Source panel: read-only QR overlay --------
