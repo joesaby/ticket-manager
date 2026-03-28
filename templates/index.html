@@ -120,8 +120,9 @@ function buildCommand() {
 
   const dsnScaleX = dsnImg.naturalWidth / dsnImg.clientWidth;
   const dsnScaleY = dsnImg.naturalHeight / dsnImg.clientHeight;
-  const qrX = Math.round(dsnBox.offsetLeft * dsnScaleX);
-  const qrY = Math.round(dsnBox.offsetTop * dsnScaleY);
+  // Subtract image offset within frame so coords are image-relative, not frame-relative
+  const qrX = Math.round((dsnBox.offsetLeft - dsnImg.offsetLeft) * dsnScaleX);
+  const qrY = Math.round((dsnBox.offsetTop  - dsnImg.offsetTop)  * dsnScaleY);
 
   // Source region in PDF 1× coords.
   // pdfImg is rendered at 2×, so divide by 2 to get PDF point coords.
@@ -131,8 +132,8 @@ function buildCommand() {
   if (srcBox && pdfImg && pdfImg.naturalWidth > 0) {
     const pdf2xScaleX = pdfImg.naturalWidth / pdfImg.clientWidth;
     const pdf2xScaleY = pdfImg.naturalHeight / pdfImg.clientHeight;
-    srcX = Math.round(srcBox.offsetLeft  * pdf2xScaleX / 2);
-    srcY = Math.round(srcBox.offsetTop   * pdf2xScaleY / 2);
+    srcX = Math.round((srcBox.offsetLeft - pdfImg.offsetLeft) * pdf2xScaleX / 2);
+    srcY = Math.round((srcBox.offsetTop  - pdfImg.offsetTop)  * pdf2xScaleY / 2);
     srcW = Math.round(srcBox.offsetWidth  * pdf2xScaleX / 2);
     srcH = Math.round(srcBox.offsetHeight * pdf2xScaleY / 2);
   }
@@ -236,8 +237,8 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
   if (srcBoxEl && pdfImgEl && pdfImgEl.naturalWidth > 0) {
     const px = pdfImgEl.naturalWidth / pdfImgEl.clientWidth;
     const py = pdfImgEl.naturalHeight / pdfImgEl.clientHeight;
-    srcX = Math.round(srcBoxEl.offsetLeft  * px / 2);
-    srcY = Math.round(srcBoxEl.offsetTop   * py / 2);
+    srcX = Math.round((srcBoxEl.offsetLeft - pdfImgEl.offsetLeft) * px / 2);
+    srcY = Math.round((srcBoxEl.offsetTop  - pdfImgEl.offsetTop)  * py / 2);
     srcW = Math.round(srcBoxEl.offsetWidth  * px / 2);
     srcH = Math.round(srcBoxEl.offsetHeight * py / 2);
   }
@@ -269,16 +270,16 @@ async function detectAndShowSourceQR(pdf, frame, imgEl) {
   const scaleX = imgEl.clientWidth / imgEl.naturalWidth;
   const scaleY = imgEl.clientHeight / imgEl.naturalHeight;
 
-  // Default position: centre of panel if no QR detected
-  let dispX = imgEl.clientWidth * 0.3;
-  let dispY = imgEl.clientHeight * 0.5;
+  // Positions are image-relative; add imgEl.offsetLeft/Top to make them frame-relative
+  let dispX = imgEl.offsetLeft + imgEl.clientWidth * 0.3;
+  let dispY = imgEl.offsetTop  + imgEl.clientHeight * 0.5;
   let dispW = 60, dispH = 80;
 
   if (data.boxes && data.boxes.length > 0) {
     const b = data.boxes[0];
     // Use expanded bounds (QR + text above) when available — matches extractor logic
-    dispX = (b.ex !== undefined ? b.ex : b.x) * scaleX;
-    dispY = (b.ey !== undefined ? b.ey : b.y) * scaleY;
+    dispX = imgEl.offsetLeft + (b.ex !== undefined ? b.ex : b.x) * scaleX;
+    dispY = imgEl.offsetTop  + (b.ey !== undefined ? b.ey : b.y) * scaleY;
     dispW = (b.ew !== undefined ? b.ew : b.w) * scaleX;
     dispH = (b.eh !== undefined ? b.eh : b.h) * scaleY;
   }
@@ -320,12 +321,10 @@ async function detectAndShowSourceQR(pdf, frame, imgEl) {
   div.addEventListener('mousedown', e => {
     if (e.target === srcHandle) return;
     e.preventDefault();
-    const fr = frame.getBoundingClientRect();
     dragState = {
       type: 'drag',
       startX: e.clientX - div.offsetLeft,
       startY: e.clientY - div.offsetTop,
-      frameRect: fr,
     };
   });
   srcHandle.addEventListener('mousedown', e => {
@@ -342,11 +341,11 @@ async function detectAndShowSourceQR(pdf, frame, imgEl) {
   document.addEventListener('mousemove', e => {
     if (!dragState) return;
     if (dragState.type === 'drag') {
-      const fr = dragState.frameRect;
       let x = e.clientX - dragState.startX;
       let y = e.clientY - dragState.startY;
-      x = Math.max(0, Math.min(x, fr.width - div.offsetWidth));
-      y = Math.max(0, Math.min(y, fr.height - div.offsetHeight));
+      // Clamp within image bounds
+      x = Math.max(imgEl.offsetLeft, Math.min(x, imgEl.offsetLeft + imgEl.clientWidth  - div.offsetWidth));
+      y = Math.max(imgEl.offsetTop,  Math.min(y, imgEl.offsetTop  + imgEl.clientHeight - div.offsetHeight));
       div.style.left = x + 'px';
       div.style.top = y + 'px';
     } else {
@@ -380,13 +379,15 @@ function setupDesignOverlay(frame, imgEl) {
   box.style.cssText = `
     position:absolute;
     width:${initW}px;height:${initH}px;
-    right:14px;bottom:14px;
     border:2px dashed #f59e0b;
     background:rgba(245,158,11,0.15);
     border-radius:4px;
-    cursor:se-resize;
+    cursor:move;
     user-select:none;
   `;
+  // Position bottom-right of the IMAGE (not the frame, which may be taller due to flexbox)
+  box.style.left = (imgEl.offsetLeft + imgEl.clientWidth  - initW - 14) + 'px';
+  box.style.top  = (imgEl.offsetTop  + imgEl.clientHeight - initH - 14) + 'px';
 
   // Resize handle (bottom-right corner)
   const handle = document.createElement('div');
@@ -429,23 +430,33 @@ function updateCoords(box, coordsEl) {
   if (!imgEl) return;
   const scaleX = imgEl.naturalWidth / imgEl.clientWidth;
   const scaleY = imgEl.naturalHeight / imgEl.clientHeight;
-
-  const x = Math.round(box.offsetLeft * scaleX);
-  const y = Math.round(box.offsetTop * scaleY);
+  const x = Math.round((box.offsetLeft - imgEl.offsetLeft) * scaleX);
+  const y = Math.round((box.offsetTop  - imgEl.offsetTop)  * scaleY);
   coordsEl.textContent = `x:${x} y:${y}`;
 }
 
 function makeDraggable(box, frame, handle, imgEl, coordsEl) {
   let dragState = null;
 
-  // Right panel: resize only (no drag to reposition)
+  // Drag to reposition (body of box)
+  box.addEventListener('mousedown', e => {
+    if (e.target === handle) return;
+    e.preventDefault();
+    dragState = {
+      type: 'drag',
+      startX: e.clientX - box.offsetLeft,
+      startY: e.clientY - box.offsetTop,
+    };
+  });
+
+  // Resize with aspect ratio locked to source (purple) box
   handle.addEventListener('mousedown', e => {
     e.preventDefault();
     e.stopPropagation();
-    // Lock aspect ratio to the current source (purple) box
     const srcBox = document.getElementById('srcQrBox');
     const ar = srcBox && srcBox.offsetWidth > 0 ? srcBox.offsetHeight / srcBox.offsetWidth : null;
     dragState = {
+      type: 'resize',
       startX: e.clientX,
       startY: e.clientY,
       startW: box.offsetWidth,
@@ -456,13 +467,24 @@ function makeDraggable(box, frame, handle, imgEl, coordsEl) {
 
   document.addEventListener('mousemove', e => {
     if (!dragState) return;
-    const dw = e.clientX - dragState.startX;
-    const newW = Math.max(20, dragState.startW + dw);
-    const newH = dragState.aspectRatio
-      ? Math.round(newW * dragState.aspectRatio)
-      : Math.max(20, dragState.startH + (e.clientY - dragState.startY));
-    box.style.width = newW + 'px';
-    box.style.height = newH + 'px';
+    if (dragState.type === 'drag') {
+      let x = e.clientX - dragState.startX;
+      let y = e.clientY - dragState.startY;
+      // Clamp within image bounds
+      x = Math.max(imgEl.offsetLeft, Math.min(x, imgEl.offsetLeft + imgEl.clientWidth  - box.offsetWidth));
+      y = Math.max(imgEl.offsetTop,  Math.min(y, imgEl.offsetTop  + imgEl.clientHeight - box.offsetHeight));
+      box.style.left = x + 'px';
+      box.style.top  = y + 'px';
+      box.style.right  = 'auto';
+      box.style.bottom = 'auto';
+    } else {
+      const newW = Math.max(20, dragState.startW + (e.clientX - dragState.startX));
+      const newH = dragState.aspectRatio
+        ? Math.round(newW * dragState.aspectRatio)
+        : Math.max(20, dragState.startH + (e.clientY - dragState.startY));
+      box.style.width  = newW + 'px';
+      box.style.height = newH + 'px';
+    }
     updateCoords(box, coordsEl);
     updateLivePreview();
   });
