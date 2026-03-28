@@ -266,8 +266,8 @@ class CompleteQRExtractor:
             
             # Load QR box bytes; apply mask if needed
             box_image_bytes = box['image']
+            ticket_num = start_number + total_tickets - 1 if start_number is not None else None
             if mask_awaiting or start_number is not None:
-                ticket_num = start_number + total_tickets - 1 if start_number is not None else None
                 masked = self.mask_awaiting_payment(Image.open(io.BytesIO(box_image_bytes)), ticket_num)
                 buf = io.BytesIO()
                 masked.save(buf, format='PNG')

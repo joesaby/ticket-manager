@@ -70,3 +70,5 @@ def test_margin_position_used_when_no_qr_xy():
     x, y = positions[0]
     # right margin: x = 800 - 60 - 20 = 720
     assert x == 720
+    # y = 600 - 70 - 20 = 510
+    assert y == 510
