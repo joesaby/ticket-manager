@@ -118,6 +118,10 @@ def generate():
     if pdf not in allowed_pdfs or design not in allowed_designs:
         abort(400)
 
+    src_x = int(data["src_x"])
+    src_y = int(data["src_y"])
+    src_w = int(data["src_w"])
+    src_h = int(data["src_h"])
     qr_x = int(data["qr_x"])
     qr_y = int(data["qr_y"])
     qr_scale = float(data["qr_scale"])
@@ -128,12 +132,13 @@ def generate():
 
     script = (
         f"#!/bin/bash\n"
-        f"python3 complete_qr_extractor.py \\\n"
+        f"python3 ticket_generator.py \\\n"
         f"  -p input/{pdf} \\\n"
         f"  -d output/{design} \\\n"
         f"  -o {output_pdf} \\\n"
-        f"  --qr-scale {qr_scale} \\\n"
+        f"  --src-x {src_x} --src-y {src_y} --src-w {src_w} --src-h {src_h} \\\n"
         f"  --qr-x {qr_x} --qr-y {qr_y} \\\n"
+        f"  --qr-scale {qr_scale} \\\n"
         f"  --start-number {start_number}\n"
     )
 

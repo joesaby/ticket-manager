@@ -123,16 +123,27 @@ function buildCommand() {
   const qrX = Math.round(dsnBox.offsetLeft * dsnScaleX);
   const qrY = Math.round(dsnBox.offsetTop * dsnScaleY);
 
-  // Derive qr_scale from actual box sizes in native pixels:
-  //   scale = (yellow box width in design native px) / (purple box width in PDF 2× native px)
-  // The PDF preview is rendered at 2×, so pdfImg.naturalWidth IS the 2× width — correct denominator.
+  // Source region in PDF 1× coords.
+  // pdfImg is rendered at 2×, so divide by 2 to get PDF point coords.
   const srcBox = document.getElementById('srcQrBox');
   const pdfImg = document.querySelector('#pdfFrame img');
+  let srcX = 0, srcY = 0, srcW = 0, srcH = 0;
+  if (srcBox && pdfImg && pdfImg.naturalWidth > 0) {
+    const pdf2xScaleX = pdfImg.naturalWidth / pdfImg.clientWidth;
+    const pdf2xScaleY = pdfImg.naturalHeight / pdfImg.clientHeight;
+    srcX = Math.round(srcBox.offsetLeft  * pdf2xScaleX / 2);
+    srcY = Math.round(srcBox.offsetTop   * pdf2xScaleY / 2);
+    srcW = Math.round(srcBox.offsetWidth  * pdf2xScaleX / 2);
+    srcH = Math.round(srcBox.offsetHeight * pdf2xScaleY / 2);
+  }
+
+  // qr_scale = (yellow box in design native px) / (purple box in 2× PDF px)
+  // Crop is taken at 2×, so the cropped image width = srcW * 2 = purple 2× native width.
   let qrScale;
   if (srcBox && pdfImg && pdfImg.naturalWidth > 0 && srcBox.offsetWidth > 0) {
-    const srcNativeW = srcBox.offsetWidth * (pdfImg.naturalWidth / pdfImg.clientWidth);
-    const dsnNativeW = dsnBox.offsetWidth * dsnScaleX;
-    qrScale = dsnNativeW / srcNativeW;
+    const srcNative2xW = srcBox.offsetWidth * (pdfImg.naturalWidth / pdfImg.clientWidth);
+    const dsnNativeW   = dsnBox.offsetWidth * dsnScaleX;
+    qrScale = dsnNativeW / srcNative2xW;
   } else {
     qrScale = parseFloat(document.getElementById('sldScale').value);
   }
@@ -145,7 +156,7 @@ function buildCommand() {
   const startNumber = parseInt(document.getElementById('inpStart').value, 10) || 1;
   const pdfStem = pdf.replace(/\.pdf$/i, '');
 
-  return `#!/bin/bash\npython3 complete_qr_extractor.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --qr-scale ${qrScale.toFixed(2)} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --start-number ${startNumber}`;
+  return `#!/bin/bash\npython3 ticket_generator.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --src-x ${srcX} --src-y ${srcY} --src-w ${srcW} --src-h ${srcH} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --qr-scale ${qrScale.toFixed(2)} \\\n  --start-number ${startNumber}`;
 }
 
 function updateLivePreview() {
@@ -218,10 +229,27 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
   const qrX = Math.round(box.offsetLeft * scaleX);
   const qrY = Math.round(box.offsetTop * scaleY);
 
+  // Re-compute source region coords from purple box
+  const srcBoxEl = document.getElementById('srcQrBox');
+  const pdfImgEl = document.querySelector('#pdfFrame img');
+  let srcX = 0, srcY = 0, srcW = 0, srcH = 0;
+  if (srcBoxEl && pdfImgEl && pdfImgEl.naturalWidth > 0) {
+    const px = pdfImgEl.naturalWidth / pdfImgEl.clientWidth;
+    const py = pdfImgEl.naturalHeight / pdfImgEl.clientHeight;
+    srcX = Math.round(srcBoxEl.offsetLeft  * px / 2);
+    srcY = Math.round(srcBoxEl.offsetTop   * py / 2);
+    srcW = Math.round(srcBoxEl.offsetWidth  * px / 2);
+    srcH = Math.round(srcBoxEl.offsetHeight * py / 2);
+  }
+
   const resp = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pdf, design, qr_x: qrX, qr_y: qrY, qr_scale: qrScale, start_number: startNumber }),
+    body: JSON.stringify({
+      pdf, design,
+      src_x: srcX, src_y: srcY, src_w: srcW, src_h: srcH,
+      qr_x: qrX, qr_y: qrY, qr_scale: qrScale, start_number: startNumber,
+    }),
   });
 
   const data = await resp.json();
