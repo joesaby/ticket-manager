@@ -356,7 +356,7 @@ function setupDesignOverlay(frame, imgEl) {
     border:2px dashed #f59e0b;
     background:rgba(245,158,11,0.15);
     border-radius:4px;
-    cursor:move;
+    cursor:se-resize;
     user-select:none;
   `;
 
@@ -410,51 +410,31 @@ function updateCoords(box, coordsEl) {
 function makeDraggable(box, frame, handle, imgEl, coordsEl) {
   let dragState = null;
 
-  box.addEventListener('mousedown', e => {
-    if (e.target === handle) return; // handled separately
-    e.preventDefault();
-    const fr = frame.getBoundingClientRect();
-    dragState = {
-      type: 'drag',
-      startX: e.clientX - box.offsetLeft,
-      startY: e.clientY - box.offsetTop,
-      frameRect: fr,
-    };
-  });
-
+  // Right panel: resize only (no drag to reposition)
   handle.addEventListener('mousedown', e => {
     e.preventDefault();
     e.stopPropagation();
+    // Lock aspect ratio to the current source (purple) box
+    const srcBox = document.getElementById('srcQrBox');
+    const ar = srcBox && srcBox.offsetWidth > 0 ? srcBox.offsetHeight / srcBox.offsetWidth : null;
     dragState = {
-      type: 'resize',
       startX: e.clientX,
       startY: e.clientY,
       startW: box.offsetWidth,
       startH: box.offsetHeight,
+      aspectRatio: ar,
     };
   });
 
   document.addEventListener('mousemove', e => {
     if (!dragState) return;
-    if (dragState.type === 'drag') {
-      const fr = dragState.frameRect;
-      let x = e.clientX - dragState.startX;
-      let y = e.clientY - dragState.startY;
-      // Clamp within frame
-      x = Math.max(0, Math.min(x, fr.width - box.offsetWidth));
-      y = Math.max(0, Math.min(y, fr.height - box.offsetHeight));
-      box.style.left = x + 'px';
-      box.style.top = y + 'px';
-      box.style.right = 'auto';
-      box.style.bottom = 'auto';
-    } else {
-      const dw = e.clientX - dragState.startX;
-      const dh = e.clientY - dragState.startY;
-      const newW = Math.max(20, dragState.startW + dw);
-      const newH = Math.max(20, dragState.startH + dh);
-      box.style.width = newW + 'px';
-      box.style.height = newH + 'px';
-    }
+    const dw = e.clientX - dragState.startX;
+    const newW = Math.max(20, dragState.startW + dw);
+    const newH = dragState.aspectRatio
+      ? Math.round(newW * dragState.aspectRatio)
+      : Math.max(20, dragState.startH + (e.clientY - dragState.startY));
+    box.style.width = newW + 'px';
+    box.style.height = newH + 'px';
     updateCoords(box, coordsEl);
     updateLivePreview();
   });
