@@ -42,46 +42,42 @@ class TicketGenerator:
         pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(2, 2))
         return pix.tobytes("png")
 
-    def _add_ticket_number(self, img_bytes, ticket_num):
-        """Replace the 'Awaiting Payment' strip with the sequential ticket number."""
-        img = Image.open(io.BytesIO(img_bytes))
-        draw = ImageDraw.Draw(img)
-        w, h = img.size
-
-        # White-out the status strip (15–30 % from top)
-        y0 = int(h * 0.15)
-        y1 = int(h * 0.30)
-        draw.rectangle([0, y0, w, y1], fill=(255, 255, 255))
-
-        # Load font
-        text = f"{ticket_num:03d}"
-        font_size = 36
-        font = None
+    def _load_font(self, size):
         for path in [
             "arial.ttf",
             "/System/Library/Fonts/Helvetica.ttc",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         ]:
             try:
-                font = ImageFont.truetype(path, font_size)
-                break
+                return ImageFont.truetype(path, size)
             except Exception:
                 pass
-        if font is None:
-            font = ImageFont.load_default()
+        return ImageFont.load_default()
 
-        bbox = draw.textbbox((0, 0), text, font=font)
+    def _draw_counter_on_page(self, out_page, ticket_num, num_x, num_y, font_size=48):
+        """Render the ticket number as an image and place it at (num_x, num_y) on the page."""
+        text = f"{ticket_num:03d}"
+        font = self._load_font(font_size)
+
+        # Measure
+        tmp = Image.new("RGBA", (1, 1))
+        bbox = ImageDraw.Draw(tmp).textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        x = (w - tw) // 2
-        y = y0 + (y1 - y0 - th) // 2
 
+        # Render onto transparent background
+        pad = 4
+        img = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img)
         for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
-            draw.text((x + dx, y + dy), text, font=font, fill=(160, 160, 160))
-        draw.text((x, y), text, font=font, fill=(0, 0, 0))
+            draw.text((pad + dx, pad + dy), text, font=font, fill=(180, 180, 180, 255))
+        draw.text((pad, pad), text, font=font, fill=(0, 0, 0, 255))
 
         buf = io.BytesIO()
         img.save(buf, format="PNG")
-        return buf.getvalue()
+        buf.seek(0)
+        rect = fitz.Rect(num_x, num_y, num_x + tw + pad * 2, num_y + th + pad * 2)
+        out_page.insert_image(rect, stream=buf.read(), overlay=True)
+        self.log(f"  counter {text} at ({num_x}, {num_y})")
 
     def _place_on_page(self, out_page, img_bytes, qr_x, qr_y, qr_scale):
         """Scale img_bytes and overlay it at (qr_x, qr_y) on out_page."""
@@ -109,6 +105,8 @@ class TicketGenerator:
         qr_x, qr_y,
         qr_scale=1.0,
         start_number=1,
+        num_x=None, num_y=None,
+        num_font_size=48,
     ):
         doc = fitz.open(pdf_path)
         design = Image.open(design_path).convert("RGBA")
@@ -128,12 +126,15 @@ class TicketGenerator:
             page = doc[page_num]
 
             crop_bytes = self._crop_region(page, src_x, src_y, src_w, src_h)
-            crop_bytes = self._add_ticket_number(crop_bytes, start_number + total)
+            ticket_num = start_number + total
             total += 1
 
             out_page = output_doc.new_page(width=dw, height=dh)
             out_page.insert_image(out_page.rect, stream=design_bytes, overlay=False)
             self._place_on_page(out_page, crop_bytes, qr_x, qr_y, qr_scale)
+
+            if num_x is not None and num_y is not None:
+                self._draw_counter_on_page(out_page, ticket_num, num_x, num_y, num_font_size)
 
         output_doc.save(output_path)
         output_doc.close()
@@ -163,6 +164,9 @@ def main():
     p.add_argument("--qr-y",     type=int,   required=True, help="Placement Y on design (px)")
     p.add_argument("--qr-scale", type=float, default=1.0,   help="Scale factor (default 1.0)")
     p.add_argument("--start-number", type=int, default=1,   help="First ticket number (default 1)")
+    p.add_argument("--num-x", type=int, default=None, help="Counter number X on design (px)")
+    p.add_argument("--num-y", type=int, default=None, help="Counter number Y on design (px)")
+    p.add_argument("--num-font-size", type=int, default=48, help="Counter font size (default 48)")
     p.add_argument("-v", "--verbose", action="store_true")
 
     args = p.parse_args()
@@ -188,6 +192,9 @@ def main():
             args.qr_x, args.qr_y,
             qr_scale=args.qr_scale,
             start_number=args.start_number,
+            num_x=args.num_x,
+            num_y=args.num_y,
+            num_font_size=args.num_font_size,
         )
     except Exception as e:
         print(f"❌  {e}")

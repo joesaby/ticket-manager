@@ -154,10 +154,19 @@ function buildCommand() {
   document.getElementById('sldScale').value = displayScale.toFixed(2);
   document.getElementById('scaleVal').textContent = displayScale.toFixed(2) + '×';
 
+  // Counter box position
+  const numBox = document.getElementById('numBox');
+  let numX = null, numY = null;
+  if (numBox && dsnImg) {
+    numX = Math.round((numBox.offsetLeft - dsnImg.offsetLeft) * dsnScaleX);
+    numY = Math.round((numBox.offsetTop  - dsnImg.offsetTop)  * dsnScaleY);
+  }
+
   const startNumber = parseInt(document.getElementById('inpStart').value, 10) || 1;
   const pdfStem = pdf.replace(/\.pdf$/i, '');
+  const numLine = numX !== null ? `\\\n  --num-x ${numX} --num-y ${numY} ` : '';
 
-  return `#!/bin/bash\npython3 ticket_generator.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --src-x ${srcX} --src-y ${srcY} --src-w ${srcW} --src-h ${srcH} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --qr-scale ${qrScale.toFixed(2)} \\\n  --start-number ${startNumber}`;
+  return `#!/bin/bash\npython3 ticket_generator.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --src-x ${srcX} --src-y ${srcY} --src-w ${srcW} --src-h ${srcH} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --qr-scale ${qrScale.toFixed(2)} ${numLine}\\\n  --start-number ${startNumber}`;
 }
 
 function updateLivePreview() {
@@ -243,13 +252,24 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
     srcH = Math.round(srcBoxEl.offsetHeight * py / 2);
   }
 
+  const numBoxEl = document.getElementById('numBox');
+  let numX = null, numY = null;
+  if (numBoxEl && imgEl) {
+    const nsx = imgEl.naturalWidth / imgEl.clientWidth;
+    const nsy = imgEl.naturalHeight / imgEl.clientHeight;
+    numX = Math.round((numBoxEl.offsetLeft - imgEl.offsetLeft) * nsx);
+    numY = Math.round((numBoxEl.offsetTop  - imgEl.offsetTop)  * nsy);
+  }
+
   const resp = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       pdf, design,
       src_x: srcX, src_y: srcY, src_w: srcW, src_h: srcH,
-      qr_x: qrX, qr_y: qrY, qr_scale: qrScale, start_number: startNumber,
+      qr_x: qrX, qr_y: qrY, qr_scale: qrScale,
+      num_x: numX, num_y: numY,
+      start_number: startNumber,
     }),
   });
 
@@ -409,6 +429,52 @@ function setupDesignOverlay(frame, imgEl) {
   window.qrOverlay = box;
 
   makeDraggable(box, frame, handle, imgEl, coords);
+  setupCounterBox(frame, imgEl, box);
+}
+
+function setupCounterBox(frame, imgEl, qrBox) {
+  const numBox = document.createElement('div');
+  numBox.id = 'numBox';
+  numBox.style.cssText = `
+    position:absolute;
+    border:2px dashed #22c55e;
+    background:rgba(34,197,94,0.15);
+    border-radius:4px;
+    cursor:move;
+    user-select:none;
+    display:flex;align-items:center;justify-content:center;
+    min-width:50px;min-height:24px;
+  `;
+  const lbl = document.createElement('span');
+  lbl.textContent = '001';
+  lbl.style.cssText = 'font-size:11px;color:#22c55e;font-weight:700;pointer-events:none;';
+  numBox.appendChild(lbl);
+
+  // Place just below the QR box
+  numBox.style.width  = qrBox.offsetWidth + 'px';
+  numBox.style.height = '28px';
+  numBox.style.left   = qrBox.offsetLeft + 'px';
+  numBox.style.top    = (qrBox.offsetTop + qrBox.offsetHeight + 6) + 'px';
+
+  frame.appendChild(numBox);
+  window.numOverlay = numBox;
+
+  let dragState = null;
+  numBox.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragState = { startX: e.clientX - numBox.offsetLeft, startY: e.clientY - numBox.offsetTop };
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragState) return;
+    let x = e.clientX - dragState.startX;
+    let y = e.clientY - dragState.startY;
+    x = Math.max(imgEl.offsetLeft, Math.min(x, imgEl.offsetLeft + imgEl.clientWidth  - numBox.offsetWidth));
+    y = Math.max(imgEl.offsetTop,  Math.min(y, imgEl.offsetTop  + imgEl.clientHeight - numBox.offsetHeight));
+    numBox.style.left = x + 'px';
+    numBox.style.top  = y + 'px';
+    updateLivePreview();
+  });
+  document.addEventListener('mouseup', () => { dragState = null; });
 }
 
 function updateOverlaySize() {

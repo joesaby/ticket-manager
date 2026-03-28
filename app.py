@@ -126,10 +126,13 @@ def generate():
     qr_y = int(data["qr_y"])
     qr_scale = float(data["qr_scale"])
     start_number = int(data["start_number"])
+    num_x = int(data["num_x"]) if data.get("num_x") is not None else None
+    num_y = int(data["num_y"]) if data.get("num_y") is not None else None
 
     pdf_stem = Path(pdf).stem
     output_pdf = f"output/{pdf_stem}_tickets.pdf"
 
+    num_line = f"  --num-x {num_x} --num-y {num_y} \\\n" if num_x is not None else ""
     script = (
         f"#!/bin/bash\n"
         f"python3 ticket_generator.py \\\n"
@@ -139,6 +142,7 @@ def generate():
         f"  --src-x {src_x} --src-y {src_y} --src-w {src_w} --src-h {src_h} \\\n"
         f"  --qr-x {qr_x} --qr-y {qr_y} \\\n"
         f"  --qr-scale {qr_scale} \\\n"
+        f"{num_line}"
         f"  --start-number {start_number}\n"
     )
 
