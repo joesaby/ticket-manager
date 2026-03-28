@@ -1021,8 +1021,8 @@ Expected output like:
 #!/bin/bash
 python3 complete_qr_extractor.py \
   -p input/Child_1_50.pdf \
-  -o output/Child_1_50_tickets.pdf \
   -d output/Child_sample.png \
+  -o output/Child_1_50_tickets.pdf \
   --qr-scale 0.6 \
   --qr-x 312 --qr-y 418 \
   --start-number 1
