@@ -56,11 +56,14 @@ def detect_qr(filename):
     if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
         abort(404)
 
-    doc = fitz.open(str(pdf_path))
-    page = doc[0]
-    mat = fitz.Matrix(2, 2)
-    pix = page.get_pixmap(matrix=mat)
-    doc.close()
+    try:
+        doc = fitz.open(str(pdf_path))
+        page = doc[0]
+        mat = fitz.Matrix(2, 2)
+        pix = page.get_pixmap(matrix=mat)
+        doc.close()
+    except Exception:
+        return jsonify({"boxes": []})
 
     img_data = pix.tobytes("png")
     nparr = np.frombuffer(img_data, np.uint8)
