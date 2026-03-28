@@ -37,6 +37,7 @@
 
   #coords { font-size: 11px; color: #94a3b8; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; position: absolute; bottom: 6px; left: 8px; pointer-events: none; }
   #status { font-size: 12px; color: #f59e0b; margin-left: 12px; }
+  #live-preview { margin: 0 20px 0; background: #0a0a0a; border-radius: 6px; padding: 10px 12px; font-family: monospace; font-size: 12px; color: #7c3aed; border: 1px solid #1e293b; white-space: pre-wrap; display: none; }
 </style>
 </head>
 <body>
@@ -80,6 +81,7 @@
   </div>
 </div>
 
+<pre id="live-preview"></pre>
 <div id="footer">
   <span class="label">Output: <strong>ticket_gen.sh</strong></span>
   <button id="btnGenerate" disabled>⬇ Generate ticket_gen.sh</button>
@@ -105,7 +107,37 @@ const scaleVal = document.getElementById('scaleVal');
 sldScale.addEventListener('input', () => {
   scaleVal.textContent = parseFloat(sldScale.value).toFixed(2) + '×';
   if (window.qrOverlay) updateOverlaySize();
+  updateLivePreview();
 });
+
+// ---------- live command preview ----------
+function buildCommand() {
+  const pdf = document.getElementById('selPdf').value;
+  const design = document.getElementById('selDesign').value;
+  if (!pdf || !design) return null;
+
+  const box = document.getElementById('qrBox');
+  const imgEl = document.getElementById('designImg');
+  if (!box || !imgEl) return null;
+
+  const scaleX = imgEl.naturalWidth / imgEl.clientWidth;
+  const scaleY = imgEl.naturalHeight / imgEl.clientHeight;
+  const qrX = Math.round(box.offsetLeft * scaleX);
+  const qrY = Math.round(box.offsetTop * scaleY);
+  const qrScale = parseFloat(document.getElementById('sldScale').value);
+  const startNumber = parseInt(document.getElementById('inpStart').value, 10) || 1;
+  const pdfStem = pdf.replace(/\.pdf$/i, '');
+
+  return `#!/bin/bash\npython3 complete_qr_extractor.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --qr-scale ${qrScale} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --start-number ${startNumber}`;
+}
+
+function updateLivePreview() {
+  const cmd = buildCommand();
+  const el = document.getElementById('live-preview');
+  if (!cmd) return;
+  el.textContent = cmd;
+  el.style.display = 'block';
+}
 
 // ---------- load ----------
 document.getElementById('btnLoad').addEventListener('click', loadFiles);
@@ -149,6 +181,7 @@ async function loadFiles() {
 
   document.getElementById('btnGenerate').disabled = false;
   status.textContent = '';
+  updateLivePreview();
 }
 
 // -------- Generate --------
@@ -178,6 +211,8 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
   const preview = document.getElementById('script-preview');
   preview.textContent = data.script;
   preview.style.display = 'block';
+  // hide live preview now that the saved script is shown
+  document.getElementById('live-preview').style.display = 'none';
 });
 </script>
 <script>
@@ -220,29 +255,61 @@ async function detectAndShowSourceQR(pdf, frame, imgEl) {
   lbl.textContent = data.boxes && data.boxes.length > 0 ? 'auto-detected — drag to adjust' : 'no QR found — drag to set';
   lbl.style.cssText = 'position:absolute;top:-18px;left:0;font-size:9px;color:#7c3aed;font-weight:600;white-space:nowrap;pointer-events:none;';
   div.appendChild(lbl);
+
+  // Resize handle (bottom-right corner)
+  const srcHandle = document.createElement('div');
+  srcHandle.style.cssText = `
+    position:absolute;right:-4px;bottom:-4px;
+    width:10px;height:10px;
+    background:#7c3aed;border-radius:2px;
+    cursor:se-resize;
+  `;
+  div.appendChild(srcHandle);
+
   frame.style.position = 'relative';
   frame.appendChild(div);
 
-  // Make source box draggable (position only, no resize)
+  // Make source box draggable + resizable
   let dragState = null;
   div.addEventListener('mousedown', e => {
+    if (e.target === srcHandle) return;
     e.preventDefault();
     const fr = frame.getBoundingClientRect();
     dragState = {
+      type: 'drag',
       startX: e.clientX - div.offsetLeft,
       startY: e.clientY - div.offsetTop,
       frameRect: fr,
     };
   });
+  srcHandle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragState = {
+      type: 'resize',
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: div.offsetWidth,
+      startH: div.offsetHeight,
+    };
+  });
   document.addEventListener('mousemove', e => {
     if (!dragState) return;
-    const fr = dragState.frameRect;
-    let x = e.clientX - dragState.startX;
-    let y = e.clientY - dragState.startY;
-    x = Math.max(0, Math.min(x, fr.width - div.offsetWidth));
-    y = Math.max(0, Math.min(y, fr.height - div.offsetHeight));
-    div.style.left = x + 'px';
-    div.style.top = y + 'px';
+    if (dragState.type === 'drag') {
+      const fr = dragState.frameRect;
+      let x = e.clientX - dragState.startX;
+      let y = e.clientY - dragState.startY;
+      x = Math.max(0, Math.min(x, fr.width - div.offsetWidth));
+      y = Math.max(0, Math.min(y, fr.height - div.offsetHeight));
+      div.style.left = x + 'px';
+      div.style.top = y + 'px';
+    } else {
+      const dw = e.clientX - dragState.startX;
+      const dh = e.clientY - dragState.startY;
+      div.style.width = Math.max(20, dragState.startW + dw) + 'px';
+      div.style.height = Math.max(20, dragState.startH + dh) + 'px';
+    }
+    updateLivePreview();
   });
   document.addEventListener('mouseup', () => { dragState = null; });
 }
@@ -376,6 +443,7 @@ function makeDraggable(box, frame, handle, imgEl, coordsEl) {
       document.getElementById('scaleVal').textContent = newScale + '×';
     }
     updateCoords(box, coordsEl);
+    updateLivePreview();
   });
 
   document.addEventListener('mouseup', () => { dragState = null; });
