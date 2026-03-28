@@ -181,38 +181,70 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
 });
 </script>
 <script>
-// -------- Source panel: read-only QR overlay --------
+// -------- Source panel: draggable QR overlay --------
 async function detectAndShowSourceQR(pdf, frame, imgEl) {
   const resp = await fetch('/api/detect-qr/' + encodeURIComponent(pdf));
   const data = await resp.json();
-  if (!data.boxes || data.boxes.length === 0) return;
 
-  const box = data.boxes[0];
-  // PDF preview image is rendered at 2x then served as PNG.
-  // The img element displays it scaled to fit. Compute display scale.
-  // detect-qr already returns coords in original (1x) PDF pixel space (it divides by 2).
-  // We only need to scale from native pixels to display pixels.
   const scaleX = imgEl.clientWidth / imgEl.naturalWidth;
   const scaleY = imgEl.clientHeight / imgEl.naturalHeight;
 
+  // Default position: centre of panel if no QR detected
+  let dispX = imgEl.clientWidth * 0.3;
+  let dispY = imgEl.clientHeight * 0.5;
+  let dispW = 60, dispH = 80;
+
+  if (data.boxes && data.boxes.length > 0) {
+    const box = data.boxes[0];
+    dispX = box.x * scaleX;
+    dispY = box.y * scaleY;
+    dispW = box.w * scaleX;
+    dispH = box.h * scaleY;
+  }
+
   const div = document.createElement('div');
+  div.id = 'srcQrBox';
   div.style.cssText = `
     position:absolute;
-    left:${box.x * scaleX}px;
-    top:${box.y * scaleY}px;
-    width:${box.w * scaleX}px;
-    height:${box.h * scaleY}px;
+    left:${dispX}px;
+    top:${dispY}px;
+    width:${dispW}px;
+    height:${dispH}px;
     border:2px solid #7c3aed;
-    background:rgba(124,58,237,0.1);
+    background:rgba(124,58,237,0.12);
     border-radius:3px;
-    pointer-events:none;
+    cursor:move;
+    user-select:none;
   `;
   const lbl = document.createElement('span');
-  lbl.textContent = 'auto-detected ✓';
-  lbl.style.cssText = 'position:absolute;top:-18px;left:0;font-size:9px;color:#7c3aed;font-weight:600;white-space:nowrap;';
+  lbl.textContent = data.boxes && data.boxes.length > 0 ? 'auto-detected — drag to adjust' : 'no QR found — drag to set';
+  lbl.style.cssText = 'position:absolute;top:-18px;left:0;font-size:9px;color:#7c3aed;font-weight:600;white-space:nowrap;pointer-events:none;';
   div.appendChild(lbl);
   frame.style.position = 'relative';
   frame.appendChild(div);
+
+  // Make source box draggable (position only, no resize)
+  let dragState = null;
+  div.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const fr = frame.getBoundingClientRect();
+    dragState = {
+      startX: e.clientX - div.offsetLeft,
+      startY: e.clientY - div.offsetTop,
+      frameRect: fr,
+    };
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragState) return;
+    const fr = dragState.frameRect;
+    let x = e.clientX - dragState.startX;
+    let y = e.clientY - dragState.startY;
+    x = Math.max(0, Math.min(x, fr.width - div.offsetWidth));
+    y = Math.max(0, Math.min(y, fr.height - div.offsetHeight));
+    div.style.left = x + 'px';
+    div.style.top = y + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragState = null; });
 }
 
 // -------- Design panel: draggable + resizable overlay --------
