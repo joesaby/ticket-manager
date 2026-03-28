@@ -34,6 +34,9 @@ def pdf_preview(filename):
     pdf_path = INPUT_DIR / filename
     if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
         abort(404)
+    # Prevent path traversal
+    if not pdf_path.resolve().is_relative_to(INPUT_DIR.resolve()):
+        abort(404)
     doc = fitz.open(str(pdf_path))
     page = doc[0]
     mat = fitz.Matrix(2, 2)
@@ -47,6 +50,9 @@ def design_image(filename):
     design_path = OUTPUT_DIR / filename
     if not design_path.exists() or design_path.suffix.lower() != ".png":
         abort(404)
+    # Prevent path traversal
+    if not design_path.resolve().is_relative_to(OUTPUT_DIR.resolve()):
+        abort(404)
     return send_file(str(design_path), mimetype="image/png")
 
 
@@ -55,6 +61,9 @@ def detect_qr(filename):
     pdf_path = INPUT_DIR / filename
     if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
         abort(404)
+    # Prevent path traversal
+    if not pdf_path.resolve().is_relative_to(INPUT_DIR.resolve()):
+        abort(404)
 
     try:
         doc = fitz.open(str(pdf_path))
@@ -62,30 +71,30 @@ def detect_qr(filename):
         mat = fitz.Matrix(2, 2)
         pix = page.get_pixmap(matrix=mat)
         doc.close()
+
+        img_data = pix.tobytes("png")
+        nparr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        decoded = pyzbar.decode(gray)
+        if not decoded:
+            _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+            decoded = pyzbar.decode(binary)
+
+        boxes = []
+        for qr in decoded:
+            x, y, w, h = qr.rect
+            boxes.append({
+                "x": x // 2,
+                "y": y // 2,
+                "w": w // 2,
+                "h": h // 2,
+            })
+
+        return jsonify({"boxes": boxes})
     except Exception:
         return jsonify({"boxes": []})
-
-    img_data = pix.tobytes("png")
-    nparr = np.frombuffer(img_data, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    decoded = pyzbar.decode(gray)
-    if not decoded:
-        _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
-        decoded = pyzbar.decode(binary)
-
-    boxes = []
-    for qr in decoded:
-        x, y, w, h = qr.rect
-        boxes.append({
-            "x": x // 2,
-            "y": y // 2,
-            "w": w // 2,
-            "h": h // 2,
-        })
-
-    return jsonify({"boxes": boxes})
 
 
 @app.route("/api/generate", methods=["POST"])
@@ -93,6 +102,12 @@ def generate():
     data = request.get_json()
     pdf = data["pdf"]
     design = data["design"]
+
+    allowed_pdfs = {f.name for f in INPUT_DIR.glob("*.pdf")}
+    allowed_designs = {f.name for f in OUTPUT_DIR.glob("*.png")}
+    if pdf not in allowed_pdfs or design not in allowed_designs:
+        abort(400)
+
     qr_x = int(data["qr_x"])
     qr_y = int(data["qr_y"])
     qr_scale = float(data["qr_scale"])
