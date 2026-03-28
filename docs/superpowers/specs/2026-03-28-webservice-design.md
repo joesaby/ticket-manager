@@ -58,6 +58,8 @@ ticket-manager/
 }
 ```
 
+`qr_x` and `qr_y` are **raw pixel coordinates** in the design PNG's native resolution. The frontend must scale display coordinates back to raw pixels before posting (using the ratio of native PNG size to displayed size).
+
 ---
 
 ## Frontend (Single Page)
@@ -86,11 +88,12 @@ ticket-manager/
 
 1. User selects PDF and design from dropdowns, sets start number and scale, clicks **Load**
 2. Left panel renders PDF page 1; QR box is auto-detected and shown as a purple overlay (draggable to adjust extraction region)
-3. Right panel renders design template; QR box appears as a draggable + resizable overlay
+3. Left panel QR box overlay is **read-only / confirmatory** — it shows where auto-detection found the QR. No extraction-region adjustment is sent to the backend.
+4. Right panel renders design template; QR box appears as a draggable + resizable overlay
    - **Drag** → sets `qr_x`, `qr_y` (top-left of box in design coords)
    - **Resize handles** → adjusts displayed box size, updates `qr_scale`
    - Live coordinate readout shown (e.g., `x:312 y:418`)
-4. Click **Generate** → calls `POST /api/generate`, writes `ticket_gen.sh`, shows script preview
+5. Click **Generate** → calls `POST /api/generate`, writes `ticket_gen.sh`, shows script preview
 
 ### Key UI behaviours
 
@@ -131,13 +134,16 @@ The output PDF filename is derived as `output/<pdf_stem>_tickets.pdf`.
 
 ## Dependencies
 
-All already present in the project:
-- `flask` — web server
-- `fitz` (PyMuPDF) — PDF-to-image rendering and QR detection support
-- `pyzbar` — QR code detection
-- `Pillow` — image handling
+- `flask` — web server (**new**, add to requirements)
+- `fitz` (PyMuPDF) — PDF-to-image rendering (already used by extractor)
+- `pyzbar` — QR code detection (already used by extractor)
+- `Pillow` — image handling (already used by extractor)
 
-No new dependencies required.
+A `requirements.txt` should be created (or updated) to include `flask`.
+
+## Notes on Existing Parameters
+
+`--start-number` already exists in `complete_qr_extractor.py`. Only `--qr-x` and `--qr-y` are new additions required.
 
 ---
 
