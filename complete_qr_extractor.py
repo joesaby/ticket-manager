@@ -182,8 +182,39 @@ class CompleteQRExtractor:
         
         return img_pil
     
-    def process_pdf(self, pdf_path, design_path, output_path, qr_scale=1.0, qr_margin=20, 
-                    qr_position='both', start_number=None, mask_awaiting=True):
+    def _place_box_on_page(self, page, box_image_bytes, qr_scale=1.0,
+                            qr_x=None, qr_y=None,
+                            qr_position='right', qr_margin=20,
+                            design_width=None, design_height=None):
+        """Place a QR box image onto a page. Uses absolute coords if qr_x/qr_y given."""
+        box_img = Image.open(io.BytesIO(box_image_bytes))
+        new_width = int(box_img.width * qr_scale)
+        new_height = int(box_img.height * qr_scale)
+        box_img = box_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+        if qr_x is not None and qr_y is not None:
+            box_x, box_y = qr_x, qr_y
+        else:
+            dw = design_width or page.rect.width
+            dh = design_height or page.rect.height
+            if qr_position == 'left':
+                box_x = qr_margin
+            else:  # right
+                box_x = dw - new_width - qr_margin
+            box_y = dh - new_height - qr_margin
+            box_x = max(0, box_x)
+            box_y = max(0, box_y)
+
+        buf = io.BytesIO()
+        box_img.save(buf, format='PNG')
+        buf.seek(0)
+        box_rect = fitz.Rect(box_x, box_y, box_x + new_width, box_y + new_height)
+        page.insert_image(box_rect, stream=buf.read(), overlay=True)
+        self.log(f"  Placed QR box at ({box_x}, {box_y}) size: {new_width}x{new_height}")
+
+    def process_pdf(self, pdf_path, design_path, output_path, qr_scale=1.0, qr_margin=20,
+                    qr_position='both', start_number=None, mask_awaiting=True,
+                    qr_x=None, qr_y=None):
         """Main processing function"""
         self.log(f"Opening PDF: {pdf_path}")
         doc = fitz.open(pdf_path)
@@ -233,56 +264,33 @@ class CompleteQRExtractor:
                 overlay=False
             )
             
-            # Load and scale QR box image
-            box_img = Image.open(io.BytesIO(box['image']))
-            
-            # Mask "Awaiting Payment" and add ticket number if requested
+            # Load QR box bytes; apply mask if needed
+            box_image_bytes = box['image']
             if mask_awaiting or start_number is not None:
                 ticket_num = start_number + total_tickets - 1 if start_number is not None else None
-                box_img = self.mask_awaiting_payment(box_img, ticket_num)
-            
-            new_width = int(box_img.width * qr_scale)
-            new_height = int(box_img.height * qr_scale)
-            box_img = box_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Position QR codes based on qr_position setting
-            positions_to_place = []
-            
-            if qr_position == 'left':
-                positions_to_place.append('left')
-            elif qr_position == 'right':
-                positions_to_place.append('right')
-            elif qr_position == 'both':
-                positions_to_place.extend(['left', 'right'])
-            
-            # Place QR code(s) at specified position(s)
-            for position in positions_to_place:
-                if position == 'left':
-                    box_x = qr_margin
-                    box_y = design_height - new_height - qr_margin
-                    position_name = "bottom-left"
-                else:  # right
-                    box_x = design_width - new_width - qr_margin
-                    box_y = design_height - new_height - qr_margin
-                    position_name = "bottom-right"
-                
-                # Ensure it fits
-                if box_y < 0:
-                    box_y = qr_margin
-                if box_x < 0:
-                    box_x = qr_margin
-                
-                # Save resized QR box
-                box_buffer = io.BytesIO()
-                box_img.save(box_buffer, format='PNG')
-                box_buffer.seek(0)
-                
-                # Insert QR box
-                box_rect = fitz.Rect(box_x, box_y, box_x + new_width, box_y + new_height)
-                new_page.insert_image(box_rect, stream=box_buffer.read(), overlay=True)
-                self.log(f"  Placed QR box at {position_name} ({box_x}, {box_y}) size: {new_width}x{new_height}")
-            
-            # Log ticket number if added
+                masked = self.mask_awaiting_payment(Image.open(io.BytesIO(box_image_bytes)), ticket_num)
+                buf = io.BytesIO()
+                masked.save(buf, format='PNG')
+                box_image_bytes = buf.getvalue()
+
+            if qr_x is not None and qr_y is not None:
+                self._place_box_on_page(new_page, box_image_bytes,
+                                        qr_scale=qr_scale, qr_x=qr_x, qr_y=qr_y)
+            else:
+                positions_to_place = []
+                if qr_position == 'left':
+                    positions_to_place.append('left')
+                elif qr_position == 'right':
+                    positions_to_place.append('right')
+                elif qr_position == 'both':
+                    positions_to_place.extend(['left', 'right'])
+                for pos in positions_to_place:
+                    self._place_box_on_page(new_page, box_image_bytes,
+                                            qr_scale=qr_scale, qr_position=pos,
+                                            qr_margin=qr_margin,
+                                            design_width=design_width,
+                                            design_height=design_height)
+
             if start_number is not None:
                 self.log(f"  Added ticket number: {ticket_num:03d} in QR box")
         
@@ -313,6 +321,10 @@ def main():
                        help='Starting ticket number (e.g., 1 for 001, 002, etc.)')
     parser.add_argument('--no-mask', action='store_true',
                        help='Do not mask "Awaiting Payment" text')
+    parser.add_argument('--qr-x', type=int, default=None,
+                       help='Absolute X coordinate for QR box on design (overrides --qr-position)')
+    parser.add_argument('--qr-y', type=int, default=None,
+                       help='Absolute Y coordinate for QR box on design (overrides --qr-position)')
     parser.add_argument('-v', '--verbose', action='store_true',
                        help='Enable verbose output')
     
@@ -347,7 +359,9 @@ def main():
             qr_margin=args.qr_margin,
             qr_position=args.qr_position,
             start_number=args.start_number,
-            mask_awaiting=not args.no_mask
+            mask_awaiting=not args.no_mask,
+            qr_x=args.qr_x,
+            qr_y=args.qr_y
         )
         
         if success:
