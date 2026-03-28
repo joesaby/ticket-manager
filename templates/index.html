@@ -58,8 +58,8 @@
     <input type="number" id="inpStart" value="1" min="1" style="width:80px">
   </div>
   <div class="field">
-    <label>QR Scale <span id="scaleVal">0.60×</span></label>
-    <input type="range" id="sldScale" min="0.2" max="2.0" step="0.05" value="0.6">
+    <label>QR Scale (computed) <span id="scaleVal">—</span></label>
+    <input type="range" id="sldScale" min="0.1" max="2.0" step="0.01" value="0.6" style="pointer-events:none;opacity:0.5;">
   </div>
   <button id="btnLoad">Load →</button>
   <span id="status"></span>
@@ -106,8 +106,6 @@ const sldScale = document.getElementById('sldScale');
 const scaleVal = document.getElementById('scaleVal');
 sldScale.addEventListener('input', () => {
   scaleVal.textContent = parseFloat(sldScale.value).toFixed(2) + '×';
-  if (window.qrOverlay) updateOverlaySize();
-  updateLivePreview();
 });
 
 // ---------- live command preview ----------
@@ -116,19 +114,38 @@ function buildCommand() {
   const design = document.getElementById('selDesign').value;
   if (!pdf || !design) return null;
 
-  const box = document.getElementById('qrBox');
-  const imgEl = document.getElementById('designImg');
-  if (!box || !imgEl) return null;
+  const dsnBox = document.getElementById('qrBox');
+  const dsnImg = document.getElementById('designImg');
+  if (!dsnBox || !dsnImg) return null;
 
-  const scaleX = imgEl.naturalWidth / imgEl.clientWidth;
-  const scaleY = imgEl.naturalHeight / imgEl.clientHeight;
-  const qrX = Math.round(box.offsetLeft * scaleX);
-  const qrY = Math.round(box.offsetTop * scaleY);
-  const qrScale = parseFloat(document.getElementById('sldScale').value);
+  const dsnScaleX = dsnImg.naturalWidth / dsnImg.clientWidth;
+  const dsnScaleY = dsnImg.naturalHeight / dsnImg.clientHeight;
+  const qrX = Math.round(dsnBox.offsetLeft * dsnScaleX);
+  const qrY = Math.round(dsnBox.offsetTop * dsnScaleY);
+
+  // Derive qr_scale from actual box sizes in native pixels:
+  //   scale = (yellow box width in design native px) / (purple box width in PDF 2× native px)
+  // The PDF preview is rendered at 2×, so pdfImg.naturalWidth IS the 2× width — correct denominator.
+  const srcBox = document.getElementById('srcQrBox');
+  const pdfImg = document.querySelector('#pdfFrame img');
+  let qrScale;
+  if (srcBox && pdfImg && pdfImg.naturalWidth > 0 && srcBox.offsetWidth > 0) {
+    const srcNativeW = srcBox.offsetWidth * (pdfImg.naturalWidth / pdfImg.clientWidth);
+    const dsnNativeW = dsnBox.offsetWidth * dsnScaleX;
+    qrScale = dsnNativeW / srcNativeW;
+  } else {
+    qrScale = parseFloat(document.getElementById('sldScale').value);
+  }
+
+  // Keep slider display in sync
+  const displayScale = Math.min(2.0, Math.max(0.1, qrScale));
+  document.getElementById('sldScale').value = displayScale.toFixed(2);
+  document.getElementById('scaleVal').textContent = displayScale.toFixed(2) + '×';
+
   const startNumber = parseInt(document.getElementById('inpStart').value, 10) || 1;
   const pdfStem = pdf.replace(/\.pdf$/i, '');
 
-  return `#!/bin/bash\npython3 complete_qr_extractor.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --qr-scale ${qrScale} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --start-number ${startNumber}`;
+  return `#!/bin/bash\npython3 complete_qr_extractor.py \\\n  -p input/${pdf} \\\n  -d output/${design} \\\n  -o output/${pdfStem}_tickets.pdf \\\n  --qr-scale ${qrScale.toFixed(2)} \\\n  --qr-x ${qrX} --qr-y ${qrY} \\\n  --start-number ${startNumber}`;
 }
 
 function updateLivePreview() {
@@ -230,11 +247,12 @@ async function detectAndShowSourceQR(pdf, frame, imgEl) {
   let dispW = 60, dispH = 80;
 
   if (data.boxes && data.boxes.length > 0) {
-    const box = data.boxes[0];
-    dispX = box.x * scaleX;
-    dispY = box.y * scaleY;
-    dispW = box.w * scaleX;
-    dispH = box.h * scaleY;
+    const b = data.boxes[0];
+    // Use expanded bounds (QR + text above) when available — matches extractor logic
+    dispX = (b.ex !== undefined ? b.ex : b.x) * scaleX;
+    dispY = (b.ey !== undefined ? b.ey : b.y) * scaleY;
+    dispW = (b.ew !== undefined ? b.ew : b.w) * scaleX;
+    dispH = (b.eh !== undefined ? b.eh : b.h) * scaleY;
   }
 
   const div = document.createElement('div');
@@ -436,11 +454,6 @@ function makeDraggable(box, frame, handle, imgEl, coordsEl) {
       const newH = Math.max(20, dragState.startH + dh);
       box.style.width = newW + 'px';
       box.style.height = newH + 'px';
-      // Update scale slider to reflect new size relative to original
-      const baseW = 80;
-      const newScale = (newW / baseW).toFixed(2);
-      document.getElementById('sldScale').value = newScale;
-      document.getElementById('scaleVal').textContent = newScale + '×';
     }
     updateCoords(box, coordsEl);
     updateLivePreview();

@@ -82,14 +82,24 @@ def detect_qr(filename):
             _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
             decoded = pyzbar.decode(binary)
 
+        # Match the expansion constants used by complete_qr_extractor.py
+        # (all values are at 2× resolution, matching the Matrix(2,2) render above)
+        TEXT_H = 80   # pixels captured above QR for ticket text
+        PAD    = 20   # horizontal padding each side
+        BOT    = 10   # bottom padding
+        img_h, img_w = img.shape[:2]
+
         boxes = []
         for qr in decoded:
             x, y, w, h = qr.rect
+            # Expanded extraction region (mirrors extract_complete_qr_boxes logic)
+            ex = max(0, x - PAD)
+            ey = max(0, y - TEXT_H)
+            ew = min(img_w, x + w + PAD) - ex
+            eh = min(img_h, y + h + BOT) - ey
             boxes.append({
-                "x": x // 2,
-                "y": y // 2,
-                "w": w // 2,
-                "h": h // 2,
+                "x": x // 2, "y": y // 2, "w": w // 2, "h": h // 2,
+                "ex": ex // 2, "ey": ey // 2, "ew": ew // 2, "eh": eh // 2,
             })
 
         return jsonify({"boxes": boxes})
@@ -135,4 +145,4 @@ def generate():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)
