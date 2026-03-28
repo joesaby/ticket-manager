@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; min-height: 100vh; }
+
+  header { background: #1e293b; padding: 12px 20px; border-bottom: 1px solid #334155; font-weight: 700; font-size: 16px; }
+
+  #controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; padding: 14px 20px; border-bottom: 1px solid #1e293b; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+  select, input[type=number], input[type=range] { background: #1e293b; border: 1px solid #334155; border-radius: 5px; padding: 7px 10px; color: #e2e8f0; font-size: 13px; }
+  input[type=range] { padding: 0; width: 110px; accent-color: #7c3aed; }
+  #scaleVal { font-size: 12px; color: #94a3b8; margin-left: 4px; }
+
+  button { padding: 8px 18px; border: none; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  #btnLoad { background: #7c3aed; color: white; }
+  #btnLoad:hover { background: #6d28d9; }
+  #btnGenerate { background: #22c55e; color: white; font-size: 14px; padding: 9px 24px; }
+  #btnGenerate:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+
+  #canvas-row { display: flex; gap: 16px; padding: 16px 20px; }
+  .panel { flex: 1; }
+  .panel-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .panel-frame { background: #1e293b; border-radius: 6px; border: 1px solid #334155; overflow: hidden; position: relative; min-height: 300px; display: flex; align-items: center; justify-content: center; }
+  .panel-frame img { max-width: 100%; display: block; user-select: none; }
+  .arrow { display: flex; align-items: center; color: #7c3aed; font-size: 24px; padding-top: 28px; }
+
+  #footer { padding: 12px 20px; border-top: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between; }
+  #footer .label { font-size: 12px; color: #64748b; }
+
+  #script-preview { margin: 0 20px 16px; background: #0a0a0a; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; color: #22c55e; border: 1px solid #1e293b; white-space: pre-wrap; display: none; }
+
+  #coords { font-size: 11px; color: #94a3b8; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; position: absolute; bottom: 6px; left: 8px; pointer-events: none; }
+  #status { font-size: 12px; color: #f59e0b; margin-left: 12px; }
+</style>
+</head>
+<body>
+
+<header>🎟 Ticket Generator</header>
+
+<div id="controls">
+  <div class="field">
+    <label>PDF (input/)</label>
+    <select id="selPdf"><option value="">— select —</option></select>
+  </div>
+  <div class="field">
+    <label>Design (output/)</label>
+    <select id="selDesign"><option value="">— select —</option></select>
+  </div>
+  <div class="field">
+    <label>Start #</label>
+    <input type="number" id="inpStart" value="1" min="1" style="width:80px">
+  </div>
+  <div class="field">
+    <label>QR Scale <span id="scaleVal">0.60×</span></label>
+    <input type="range" id="sldScale" min="0.2" max="2.0" step="0.05" value="0.6">
+  </div>
+  <button id="btnLoad">Load →</button>
+  <span id="status"></span>
+</div>
+
+<div id="canvas-row">
+  <div class="panel">
+    <div class="panel-label">① Source — PDF page 1</div>
+    <div class="panel-frame" id="pdfFrame">
+      <span style="color:#475569;font-size:13px;">Select a PDF and click Load</span>
+    </div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="panel">
+    <div class="panel-label">② Target — Design template</div>
+    <div class="panel-frame" id="designFrame">
+      <span style="color:#475569;font-size:13px;">Select a design and click Load</span>
+    </div>
+  </div>
+</div>
+
+<div id="footer">
+  <span class="label">Output: <strong>ticket_gen.sh</strong></span>
+  <button id="btnGenerate" disabled>⬇ Generate ticket_gen.sh</button>
+</div>
+<pre id="script-preview"></pre>
+
+<script>
+// ---------- populate dropdowns ----------
+fetch('/api/files').then(r => r.json()).then(data => {
+  const pdfSel = document.getElementById('selPdf');
+  const dsnSel = document.getElementById('selDesign');
+  data.pdfs.forEach(f => {
+    const o = document.createElement('option'); o.value = f; o.textContent = f; pdfSel.appendChild(o);
+  });
+  data.designs.forEach(f => {
+    const o = document.createElement('option'); o.value = f; o.textContent = f; dsnSel.appendChild(o);
+  });
+});
+
+// ---------- scale slider ----------
+const sldScale = document.getElementById('sldScale');
+const scaleVal = document.getElementById('scaleVal');
+sldScale.addEventListener('input', () => {
+  scaleVal.textContent = parseFloat(sldScale.value).toFixed(2) + '×';
+  if (window.qrOverlay) updateOverlaySize();
+});
+
+// ---------- load ----------
+document.getElementById('btnLoad').addEventListener('click', loadFiles);
+
+async function loadFiles() {
+  const pdf = document.getElementById('selPdf').value;
+  const design = document.getElementById('selDesign').value;
+  if (!pdf || !design) { alert('Select both a PDF and a design first.'); return; }
+
+  const status = document.getElementById('status');
+  status.textContent = 'Loading…';
+
+  // Load PDF preview
+  const pdfFrame = document.getElementById('pdfFrame');
+  pdfFrame.innerHTML = '';
+  const pdfImg = document.createElement('img');
+  pdfImg.src = '/api/pdf-preview/' + encodeURIComponent(pdf) + '?t=' + Date.now();
+  pdfImg.alt = 'PDF page 1';
+  pdfFrame.appendChild(pdfImg);
+
+  // Load design
+  const designFrame = document.getElementById('designFrame');
+  designFrame.innerHTML = '';
+  const dsnImg = document.createElement('img');
+  dsnImg.id = 'designImg';
+  dsnImg.src = '/api/design/' + encodeURIComponent(design) + '?t=' + Date.now();
+  dsnImg.alt = 'Design template';
+  designFrame.appendChild(dsnImg);
+
+  // Once design loaded, detect QR and setup overlay
+  await Promise.all([
+    new Promise(r => { pdfImg.onload = r; pdfImg.onerror = r; }),
+    new Promise(r => { dsnImg.onload = r; dsnImg.onerror = r; }),
+  ]);
+
+  // Detect QR and show source overlay (read-only)
+  detectAndShowSourceQR(pdf, pdfFrame, pdfImg);
+
+  // Setup draggable overlay on design
+  setupDesignOverlay(designFrame, dsnImg);
+
+  document.getElementById('btnGenerate').disabled = false;
+  status.textContent = '';
+}
+</script>
+<!-- drag-and-drop logic added in Task 7 -->
+</body>
+</html>
